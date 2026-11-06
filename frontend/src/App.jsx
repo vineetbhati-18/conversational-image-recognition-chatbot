@@ -8,6 +8,7 @@ import ImageUploader from './components/image/ImageUploader';
 import ImageCanvasViewer from './components/image/ImageCanvasViewer';
 import ConfidenceSlider from './components/image/ConfidenceSlider';
 import ObjectDetectionList from './components/image/ObjectDetectionList';
+import SessionSidebar from './components/session/SessionSidebar';
 import { fetchHealth } from './services/api';
 
 function MainAppContent() {
@@ -51,14 +52,7 @@ function MainAppContent() {
         isSidebarOpen={isSidebarOpen}
         closeSidebar={() => setIsSidebarOpen(false)}
         activeTab={activeTab}
-        sidebar={
-          <div className="p-4 text-xs text-slate-400">
-            <div className="font-semibold text-slate-200 mb-2">Conversations</div>
-            <div className="p-2.5 rounded-lg bg-blue-900/20 border border-blue-800/40 text-blue-300 font-medium truncate">
-              {activeSession?.title || 'Active Session'}
-            </div>
-          </div>
-        }
+        sidebar={<SessionSidebar onClose={() => setIsSidebarOpen(false)} />}
         visionPanel={
           <div className="flex-1 flex flex-col space-y-4">
             <ImageUploader />
