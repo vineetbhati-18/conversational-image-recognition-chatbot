@@ -181,6 +181,22 @@ export function ChatProvider({ children }) {
     setSelectedObjectId(null);
   }, [activeImage]);
 
+  // Initial fetch from backend if available
+  useEffect(() => {
+    async function loadBackendSessions() {
+      try {
+        const data = await fetchSessions();
+        if (data && data.length > 0) {
+          setSessions(data);
+          setActiveSessionId(data[0].id);
+        }
+      } catch (err) {
+        console.info('Backend session fetch note:', err.message);
+      }
+    }
+    loadBackendSessions();
+  }, []);
+
   // Send Chat Message
   const sendMessage = useCallback(async (text) => {
     if (!text || !text.trim()) return;
@@ -198,10 +214,22 @@ export function ChatProvider({ children }) {
     setErrorMessage(null);
 
     try {
-      // Call backend chat API
-      const res = await apiSendChatMessage(activeSessionId, trimmed, activeImage?.id).catch((err) => {
-        // Return context-aware fallback response if backend endpoint is in transit
-        return {
+      // Call backend chat API with active image ID
+      const res = await apiSendChatMessage(
+        activeSessionId,
+        trimmed,
+        activeImage?.id || null
+      );
+
+      if (res && res.content) {
+        setMessages((prev) => [...prev, res]);
+      }
+    } catch (err) {
+      console.warn('Backend chat API error, using local fallback:', err.message);
+      // Return context-aware fallback response if backend endpoint temporarily unavailable
+      setMessages((prev) => [
+        ...prev,
+        {
           id: `msg-ast-${Date.now()}`,
           sender_type: 'assistant',
           content: activeImage
@@ -209,15 +237,11 @@ export function ChatProvider({ children }) {
             : `Please upload an image first so I can inspect visual objects and answer questions about it.`,
           created_at: new Date().toISOString(),
           metadata: {
-            vqa_mode: 'active',
+            vqa_mode: Boolean(activeImage),
             latency_ms: 32,
           },
-        };
-      });
-
-      setMessages((prev) => [...prev, res]);
-    } catch (err) {
-      setErrorMessage(`Chat error: ${err.message}`);
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
