@@ -1,10 +1,17 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, status
+from fastapi import APIRouter, UploadFile, File, Form, Depends, status, Query
 from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from uuid import UUID, uuid4
 from datetime import datetime
 from pathlib import Path
+
+from app.core.database import get_db
 from app.services.image_processing import validate_and_save_image
-from app.schemas.image import ImageResponse
+from app.services.yolo_service import get_yolo_service
+from app.schemas.image import ImageResponse, DetectedObjectSchema, BoundingBox
+from app.models.image import ImageModel, DetectedObjectModel
+from app.models.session import SessionModel
 from app.core.exceptions import EntityNotFoundError
 from app.config import get_settings
 
@@ -16,41 +23,148 @@ settings = get_settings()
 async def upload_image_endpoint(
     file: UploadFile = File(...),
     session_id: UUID = Form(default_factory=uuid4),
+    db: AsyncSession = Depends(get_db),
 ):
     """
-    Secure Image Ingestion Endpoint:
-    - Validates magic bytes (JPEG, PNG, WebP)
-    - Validates file size limit (15MB)
-    - Saves locally with secure UUID filename
-    - Returns image metadata and URL
+    Secure Image Ingestion & Automated Object Detection:
+    1. Validates magic bytes (JPEG, PNG, WebP) and size limits.
+    2. Persists image locally.
+    3. Runs YOLOv8 deep-learning detection on MPS/CPU.
+    4. Saves image and detected object telemetry to PostgreSQL.
     """
+    # 1. Ensure target session exists in DB (or create automatically)
+    session_query = select(SessionModel).where(SessionModel.id == session_id)
+    session_result = await db.execute(session_query)
+    session = session_result.scalar_one_or_none()
+    if not session:
+        session = SessionModel(id=session_id, title=f"Recon Session ({file.filename or 'Image'})")
+        db.add(session)
+        await db.commit()
+
+    # 2. Ingest and save image file
     contents = await file.read()
     image_meta = await validate_and_save_image(
         file_bytes=contents,
         original_filename=file.filename or "uploaded_image.jpg",
     )
 
-    return ImageResponse(
+    # 3. Save Image record
+    db_image = ImageModel(
         id=image_meta["id"],
         session_id=session_id,
         filename=image_meta["filename"],
+        storage_path=image_meta["storage_path"],
+        mime_type=image_meta["mime_type"],
         file_size_bytes=image_meta["file_size_bytes"],
         width=image_meta["width"],
         height=image_meta["height"],
-        mime_type=image_meta["mime_type"],
+    )
+    db.add(db_image)
+    await db.commit()
+
+    # 4. Run real YOLOv8 detection pass
+    yolo = get_yolo_service()
+    detection_results = yolo.detect_objects(
+        image_source=image_meta["storage_path"],
+        conf_threshold=settings.CONFIDENCE_THRESHOLD,
+    )
+
+    # 5. Persist detected objects to PostgreSQL
+    detected_schemas = []
+    for d in detection_results["detections"]:
+        bbox = d["bbox"]
+        db_obj = DetectedObjectModel(
+            image_id=db_image.id,
+            class_name=d["class_name"],
+            confidence_score=d["confidence"],
+            bbox_x_min=bbox["x_min"],
+            bbox_y_min=bbox["y_min"],
+            bbox_x_max=bbox["x_max"],
+            bbox_y_max=bbox["y_max"],
+        )
+        db.add(db_obj)
+        detected_schemas.append(
+            DetectedObjectSchema(
+                id=UUID(d["id"]),
+                class_name=d["class_name"],
+                confidence=d["confidence"],
+                bbox=BoundingBox(
+                    x_min=bbox["x_min"],
+                    y_min=bbox["y_min"],
+                    x_max=bbox["x_max"],
+                    y_max=bbox["y_max"],
+                ),
+            )
+        )
+    await db.commit()
+
+    return ImageResponse(
+        id=db_image.id,
+        session_id=session_id,
+        filename=db_image.filename,
+        file_size_bytes=db_image.file_size_bytes,
+        width=db_image.width,
+        height=db_image.height,
+        mime_type=db_image.mime_type,
         url=image_meta["url"],
-        detected_objects=[],
-        created_at=datetime.utcnow(),
+        detected_objects=detected_schemas,
+        created_at=db_image.created_at,
+    )
+
+
+@router.post("/{image_id}/detect", response_model=ImageResponse)
+async def rerun_detection_endpoint(
+    image_id: UUID,
+    confidence_threshold: float = Query(default=0.35, ge=0.05, le=0.95),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Re-runs object detection on an existing image with an updated confidence threshold.
+    """
+    image_query = select(ImageModel).where(ImageModel.id == image_id)
+    image_result = await db.execute(image_query)
+    image = image_result.scalar_one_or_none()
+    if not image:
+        raise EntityNotFoundError(f"Image {image_id} not found.")
+
+    yolo = get_yolo_service()
+    detection_results = yolo.detect_objects(
+        image_source=image.storage_path,
+        conf_threshold=confidence_threshold,
+    )
+
+    detected_schemas = [
+        DetectedObjectSchema(
+            id=UUID(d["id"]),
+            class_name=d["class_name"],
+            confidence=d["confidence"],
+            bbox=BoundingBox(
+                x_min=d["bbox"]["x_min"],
+                y_min=d["bbox"]["y_min"],
+                x_max=d["bbox"]["x_max"],
+                y_max=d["bbox"]["y_max"],
+            ),
+        )
+        for d in detection_results["detections"]
+    ]
+
+    return ImageResponse(
+        id=image.id,
+        session_id=image.session_id,
+        filename=image.filename,
+        file_size_bytes=image.file_size_bytes,
+        width=image.width,
+        height=image.height,
+        mime_type=image.mime_type,
+        url=f"/uploads/{Path(image.storage_path).name}",
+        detected_objects=detected_schemas,
+        created_at=image.created_at,
     )
 
 
 @router.get("/{filename}/file")
 async def get_image_file(filename: str):
-    """
-    Streams raw image bytes from local secure storage.
-    """
     file_path = settings.UPLOAD_DIR / filename
     if not file_path.exists():
         raise EntityNotFoundError(f"Image {filename} not found.")
-
     return FileResponse(path=str(file_path))
