@@ -7,11 +7,15 @@ import logging
 
 from app.config import get_settings
 from app.core.exceptions import AppException, app_exception_handler, global_exception_handler
+from app.core.logging_middleware import RequestLoggingMiddleware
+from app.utils.logger import setup_logger, get_logger
 from app.core.database import engine, init_db
 import app.models  # Register all models for create_all
 from app.api.v1 import api_router
 
-logger = logging.getLogger("bel_chatbot")
+# Initialize structured logging
+setup_logger("bel_chatbot")
+logger = get_logger("main")
 settings = get_settings()
 
 
@@ -62,6 +66,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Audit & Latency Logging Middleware
+    app.add_middleware(RequestLoggingMiddleware)
 
     # Exception Handlers
     app.add_exception_handler(AppException, app_exception_handler)
