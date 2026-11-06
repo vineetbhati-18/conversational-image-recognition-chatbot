@@ -3,6 +3,8 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ChatProvider, useChat } from './context/ChatContext';
 import Header from './components/common/Header';
 import DashboardLayout from './components/common/DashboardLayout';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import Toast from './components/common/Toast';
 import ChatContainer from './components/chat/ChatContainer';
 import ImageUploader from './components/image/ImageUploader';
 import ImageCanvasViewer from './components/image/ImageCanvasViewer';
@@ -16,8 +18,19 @@ function MainAppContent() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('vision'); // 'vision' | 'chat' for mobile
+  const [activeToast, setActiveToast] = useState(null);
 
-  const { activeSession, messages, activeImage } = useChat();
+  const { activeSession, messages, activeImage, errorMessage } = useChat();
+
+  useEffect(() => {
+    if (errorMessage) {
+      setActiveToast({
+        type: 'error',
+        title: 'Operation Interrupted',
+        message: errorMessage,
+      });
+    }
+  }, [errorMessage]);
 
   useEffect(() => {
     async function checkBackend() {
@@ -71,16 +84,22 @@ function MainAppContent() {
         }
         chatPanel={<ChatContainer />}
       />
+
+      {/* Toast Notification Container */}
+      <Toast toast={activeToast} onClose={() => setActiveToast(null)} />
     </div>
   );
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <ChatProvider>
-        <MainAppContent />
-      </ChatProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <ChatProvider>
+          <MainAppContent />
+        </ChatProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
+
