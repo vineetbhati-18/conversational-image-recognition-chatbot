@@ -45,6 +45,67 @@ class YOLOService:
     def is_ready(self) -> bool:
         return self._is_loaded and self.model is not None
 
+    def detect_objects(
+        self,
+        image_source,
+        conf_threshold: float = 0.35,
+        classes_filter: Optional[list] = None,
+    ) -> dict:
+        """
+        Executes deep-learning object detection on an image.
+        Returns detected classes, confidence scores, bounding boxes, and execution metrics.
+        """
+        self.load_model()
+        import time
+
+        start_time = time.perf_counter()
+        results = self.model.predict(
+            source=image_source,
+            conf=conf_threshold,
+            device=self.device,
+            verbose=False,
+        )
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        detections = []
+        result = results[0]  # First image in batch
+        boxes = result.boxes
+
+        if boxes is not None and len(boxes) > 0:
+            for box in boxes:
+                cls_id = int(box.cls[0].item())
+                class_name = result.names[cls_id]
+
+                if classes_filter and class_name not in classes_filter:
+                    continue
+
+                conf = float(box.conf[0].item())
+                xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max]
+
+                detections.append({
+                    "class_id": cls_id,
+                    "class_name": class_name,
+                    "confidence": round(conf, 4),
+                    "bbox": {
+                        "x_min": round(xyxy[0], 2),
+                        "y_min": round(xyxy[1], 2),
+                        "x_max": round(xyxy[2], 2),
+                        "y_max": round(xyxy[3], 2),
+                    },
+                })
+
+        logger.info(
+            f"YOLO detected {len(detections)} objects on {self.device.upper()} in {latency_ms:.2f}ms"
+        )
+
+        return {
+            "detections": detections,
+            "count": len(detections),
+            "latency_ms": round(latency_ms, 2),
+            "device": self.device,
+            "model": self.model_name,
+        }
+
 
 _yolo_instance: Optional[YOLOService] = None
 
