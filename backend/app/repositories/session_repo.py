@@ -4,6 +4,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID
 from typing import List, Optional
 from app.models.session import SessionModel
+from app.models.image import ImageModel
 
 
 class SessionRepository:
@@ -23,7 +24,7 @@ class SessionRepository:
         if load_relations:
             query = query.options(
                 selectinload(SessionModel.messages),
-                selectinload(SessionModel.images),
+                selectinload(SessionModel.images).selectinload(ImageModel.detected_objects),
             )
         result = await db.execute(query)
         return result.scalar_one_or_none()

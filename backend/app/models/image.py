@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
+from pathlib import Path
 from app.core.database import Base
 
 
@@ -23,6 +24,11 @@ class ImageModel(Base):
     session = relationship("SessionModel", back_populates="images")
     detected_objects = relationship("DetectedObjectModel", back_populates="image", cascade="all, delete-orphan")
 
+    @property
+    def url(self) -> str:
+        filename = Path(self.storage_path).name if self.storage_path else self.filename
+        return f"/uploads/{filename}"
+
 
 class DetectedObjectModel(Base):
     __tablename__ = "detected_objects"
@@ -39,3 +45,17 @@ class DetectedObjectModel(Base):
 
     # Relationships
     image = relationship("ImageModel", back_populates="detected_objects")
+
+    @property
+    def confidence(self) -> float:
+        return self.confidence_score
+
+    @property
+    def bbox(self) -> dict:
+        return {
+            "x_min": self.bbox_x_min,
+            "y_min": self.bbox_y_min,
+            "x_max": self.bbox_x_max,
+            "y_max": self.bbox_y_max,
+        }
+
