@@ -45,6 +45,21 @@ class YOLOService:
     def is_ready(self) -> bool:
         return self._is_loaded and self.model is not None
 
+    @staticmethod
+    def calculate_spatial_position(x_min: float, y_min: float, x_max: float, y_max: float, img_w: int, img_h: int) -> str:
+        """
+        Determines the intuitive spatial sector of a detected object within the image.
+        """
+        cx = (x_min + x_max) / 2.0
+        cy = (y_min + y_max) / 2.0
+
+        horiz = "left" if cx < img_w * 0.38 else "right" if cx > img_w * 0.62 else "center"
+        vert = "top" if cy < img_h * 0.38 else "bottom" if cy > img_h * 0.62 else "middle"
+
+        if horiz == "center" and vert == "middle":
+            return "center"
+        return f"{vert}-{horiz}"
+
     def detect_objects(
         self,
         image_source,
@@ -53,10 +68,12 @@ class YOLOService:
     ) -> dict:
         """
         Executes deep-learning object detection on an image.
-        Returns detected classes, confidence scores, bounding boxes, and execution metrics.
+        Returns detected classes, confidence scores, bounding boxes, normalized coordinates,
+        spatial sector tags, and execution metrics.
         """
         self.load_model()
         import time
+        from uuid import uuid4
 
         start_time = time.perf_counter()
         results = self.model.predict(
@@ -70,6 +87,8 @@ class YOLOService:
         detections = []
         result = results[0]  # First image in batch
         boxes = result.boxes
+        orig_shape = result.orig_shape  # (height, width)
+        img_h, img_w = orig_shape[0], orig_shape[1]
 
         if boxes is not None and len(boxes) > 0:
             for box in boxes:
@@ -82,15 +101,32 @@ class YOLOService:
                 conf = float(box.conf[0].item())
                 xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max]
 
+                x_min, y_min, x_max, y_max = xyxy[0], xyxy[1], xyxy[2], xyxy[3]
+                bbox_w = x_max - x_min
+                bbox_h = y_max - y_min
+                area_ratio = round((bbox_w * bbox_h) / (img_w * img_h), 4) if (img_w * img_h) > 0 else 0.0
+
+                spatial_sector = self.calculate_spatial_position(x_min, y_min, x_max, y_max, img_w, img_h)
+
                 detections.append({
+                    "id": str(uuid4()),
                     "class_id": cls_id,
                     "class_name": class_name,
                     "confidence": round(conf, 4),
+                    "confidence_percentage": round(conf * 100, 1),
+                    "spatial_sector": spatial_sector,
+                    "area_ratio": area_ratio,
                     "bbox": {
-                        "x_min": round(xyxy[0], 2),
-                        "y_min": round(xyxy[1], 2),
-                        "x_max": round(xyxy[2], 2),
-                        "y_max": round(xyxy[3], 2),
+                        "x_min": round(x_min, 2),
+                        "y_min": round(y_min, 2),
+                        "x_max": round(x_max, 2),
+                        "y_max": round(y_max, 2),
+                    },
+                    "normalized_bbox": {
+                        "x_min": round(x_min / img_w, 4) if img_w else 0.0,
+                        "y_min": round(y_min / img_h, 4) if img_h else 0.0,
+                        "x_max": round(x_max / img_w, 4) if img_w else 0.0,
+                        "y_max": round(y_max / img_h, 4) if img_h else 0.0,
                     },
                 })
 
@@ -101,6 +137,7 @@ class YOLOService:
         return {
             "detections": detections,
             "count": len(detections),
+            "image_dimensions": {"width": img_w, "height": img_h},
             "latency_ms": round(latency_ms, 2),
             "device": self.device,
             "model": self.model_name,
