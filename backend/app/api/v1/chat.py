@@ -7,9 +7,9 @@ from datetime import datetime
 import time
 
 from app.core.database import get_db
-from app.models.session import SessionModel
-from app.models.message import MessageModel
-from app.models.image import ImageModel
+from app.repositories.session_repo import SessionRepository
+from app.repositories.image_repo import ImageRepository
+from app.repositories.message_repo import MessageRepository
 from app.schemas.chat import ChatMessageRequest, MessageResponse
 from app.services.blip_service import get_blip_service
 from app.services.conversational_engine import get_context_manager, get_fusion_engine
@@ -25,41 +25,32 @@ async def send_chat_message(
 ):
     """
     Context-Aware Multimodal Chatbot Completion:
-    1. Loads dialogue history from PostgreSQL.
+    1. Loads dialogue history from PostgreSQL via SessionRepository.
     2. Resolves pronouns & coreferences across dialogue turns.
     3. Runs BLIP VQA on active image if present.
     4. Fuses YOLO telemetry and BLIP answer into coherent natural response.
-    5. Saves dialogue exchange to PostgreSQL.
+    5. Saves dialogue exchange to PostgreSQL via MessageRepository.
     """
     start_time = time.perf_counter()
 
-    # 1. Fetch Session
-    session_query = (
-        select(SessionModel)
-        .where(SessionModel.id == payload.session_id)
-        .options(selectinload(SessionModel.messages))
-    )
-    result = await db.execute(session_query)
-    session = result.scalar_one_or_none()
-
+    # 1. Fetch or create Session
+    session = await SessionRepository.get_by_id(db, payload.session_id, load_relations=True)
     if not session:
-        # Create new session if does not exist
-        session = SessionModel(id=payload.session_id, title=payload.content[:40])
-        db.add(session)
-        await db.commit()
+        session = await SessionRepository.create(
+            db, title=payload.content[:40], session_id=payload.session_id
+        )
         session_messages = []
     else:
         session_messages = session.messages
 
     # 2. Persist User Message
-    user_msg = MessageModel(
+    await MessageRepository.create(
+        db,
         session_id=payload.session_id,
-        image_id=payload.image_id,
         sender_type="user",
         content=payload.content,
+        image_id=payload.image_id,
     )
-    db.add(user_msg)
-    await db.commit()
 
     # 3. Context & Multimodal Processing
     context_mgr = get_context_manager()
@@ -72,16 +63,8 @@ async def send_chat_message(
     vqa_latency = 0.0
 
     if payload.image_id:
-        img_query = (
-            select(ImageModel)
-            .where(ImageModel.id == payload.image_id)
-            .options(selectinload(ImageModel.detected_objects))
-        )
-        img_res = await db.execute(img_query)
-        image = img_res.scalar_one_or_none()
-
+        image = await ImageRepository.get_by_id(db, payload.image_id, load_objects=True)
         if image:
-            # Map DB detected objects to dicts for fusion engine
             yolo_detections = [
                 {
                     "class_name": o.class_name,
@@ -97,12 +80,10 @@ async def send_chat_message(
                 for o in image.detected_objects
             ]
 
-            # Resolve coreference
             resolved_query = context_mgr.resolve_pronouns_and_coreference(
                 payload.content, history_turns, yolo_detections
             )
 
-            # Run BLIP VQA
             blip = get_blip_service()
             vqa_res = blip.answer_question(image.storage_path, resolved_query)
             vqa_answer = vqa_res["answer"]
@@ -118,7 +99,6 @@ async def send_chat_message(
 
     total_latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
-    # 5. Persist Assistant Response
     meta_payload = {
         "vqa_mode": bool(payload.image_id),
         "vqa_answer": vqa_answer,
@@ -127,16 +107,15 @@ async def send_chat_message(
         "vqa_latency_ms": vqa_latency,
     }
 
-    assistant_msg = MessageModel(
+    # 5. Persist Assistant Response via Repository
+    assistant_msg = await MessageRepository.create(
+        db,
         session_id=payload.session_id,
-        image_id=payload.image_id,
         sender_type="assistant",
         content=fused["content"],
-        metadata_payload=meta_payload,
+        image_id=payload.image_id,
+        metadata=meta_payload,
     )
-    db.add(assistant_msg)
-    await db.commit()
-    await db.refresh(assistant_msg)
 
     return MessageResponse(
         id=assistant_msg.id,

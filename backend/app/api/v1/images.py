@@ -7,11 +7,11 @@ from datetime import datetime
 from pathlib import Path
 
 from app.core.database import get_db
+from app.repositories.session_repo import SessionRepository
+from app.repositories.image_repo import ImageRepository
 from app.services.image_processing import validate_and_save_image
 from app.services.yolo_service import get_yolo_service
 from app.schemas.image import ImageResponse, DetectedObjectSchema, BoundingBox
-from app.models.image import ImageModel, DetectedObjectModel
-from app.models.session import SessionModel
 from app.core.exceptions import EntityNotFoundError
 from app.config import get_settings
 
@@ -25,21 +25,12 @@ async def upload_image_endpoint(
     session_id: UUID = Form(default_factory=uuid4),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Secure Image Ingestion & Automated Object Detection:
-    1. Validates magic bytes (JPEG, PNG, WebP) and size limits.
-    2. Persists image locally.
-    3. Runs YOLOv8 deep-learning detection on MPS/CPU.
-    4. Saves image and detected object telemetry to PostgreSQL.
-    """
     # 1. Ensure target session exists in DB (or create automatically)
-    session_query = select(SessionModel).where(SessionModel.id == session_id)
-    session_result = await db.execute(session_query)
-    session = session_result.scalar_one_or_none()
+    session = await SessionRepository.get_by_id(db, session_id, load_relations=False)
     if not session:
-        session = SessionModel(id=session_id, title=f"Recon Session ({file.filename or 'Image'})")
-        db.add(session)
-        await db.commit()
+        session = await SessionRepository.create(
+            db, title=f"Recon ({file.filename or 'Image'})", session_id=session_id
+        )
 
     # 2. Ingest and save image file
     contents = await file.read()
@@ -48,9 +39,10 @@ async def upload_image_endpoint(
         original_filename=file.filename or "uploaded_image.jpg",
     )
 
-    # 3. Save Image record
-    db_image = ImageModel(
-        id=image_meta["id"],
+    # 3. Save Image record via Repository
+    db_image = await ImageRepository.create(
+        db,
+        image_id=image_meta["id"],
         session_id=session_id,
         filename=image_meta["filename"],
         storage_path=image_meta["storage_path"],
@@ -59,8 +51,6 @@ async def upload_image_endpoint(
         width=image_meta["width"],
         height=image_meta["height"],
     )
-    db.add(db_image)
-    await db.commit()
 
     # 4. Run real YOLOv8 detection pass
     yolo = get_yolo_service()
@@ -69,34 +59,27 @@ async def upload_image_endpoint(
         conf_threshold=settings.CONFIDENCE_THRESHOLD,
     )
 
-    # 5. Persist detected objects to PostgreSQL
-    detected_schemas = []
-    for d in detection_results["detections"]:
-        bbox = d["bbox"]
-        db_obj = DetectedObjectModel(
-            image_id=db_image.id,
+    # 5. Persist detected objects to PostgreSQL via Repository
+    await ImageRepository.save_detected_objects(
+        db,
+        image_id=db_image.id,
+        detections=detection_results["detections"],
+    )
+
+    detected_schemas = [
+        DetectedObjectSchema(
+            id=UUID(d["id"]),
             class_name=d["class_name"],
-            confidence_score=d["confidence"],
-            bbox_x_min=bbox["x_min"],
-            bbox_y_min=bbox["y_min"],
-            bbox_x_max=bbox["x_max"],
-            bbox_y_max=bbox["y_max"],
+            confidence=d["confidence"],
+            bbox=BoundingBox(
+                x_min=d["bbox"]["x_min"],
+                y_min=d["bbox"]["y_min"],
+                x_max=d["bbox"]["x_max"],
+                y_max=d["bbox"]["y_max"],
+            ),
         )
-        db.add(db_obj)
-        detected_schemas.append(
-            DetectedObjectSchema(
-                id=UUID(d["id"]),
-                class_name=d["class_name"],
-                confidence=d["confidence"],
-                bbox=BoundingBox(
-                    x_min=bbox["x_min"],
-                    y_min=bbox["y_min"],
-                    x_max=bbox["x_max"],
-                    y_max=bbox["y_max"],
-                ),
-            )
-        )
-    await db.commit()
+        for d in detection_results["detections"]
+    ]
 
     return ImageResponse(
         id=db_image.id,
@@ -118,12 +101,7 @@ async def rerun_detection_endpoint(
     confidence_threshold: float = Query(default=0.35, ge=0.05, le=0.95),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Re-runs object detection on an existing image with an updated confidence threshold.
-    """
-    image_query = select(ImageModel).where(ImageModel.id == image_id)
-    image_result = await db.execute(image_query)
-    image = image_result.scalar_one_or_none()
+    image = await ImageRepository.get_by_id(db, image_id, load_objects=False)
     if not image:
         raise EntityNotFoundError(f"Image {image_id} not found.")
 
