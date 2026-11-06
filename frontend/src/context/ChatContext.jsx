@@ -103,7 +103,12 @@ export function ChatProvider({ children }) {
     setErrorMessage(null);
 
     try {
-      // 1. Create client-side preview and read natural dimensions
+      // 1. Revoke previous local object URL if existing to free memory
+      if (activeImage?.url && activeImage.url.startsWith('blob:')) {
+        URL.revokeObjectURL(activeImage.url);
+      }
+
+      // Create client-side preview and read natural dimensions
       const localUrl = URL.createObjectURL(file);
       const img = new Image();
       img.src = localUrl;
@@ -142,6 +147,19 @@ export function ChatProvider({ children }) {
                 id: `msg-${Date.now()}`,
                 sender_type: 'system',
                 content: `Image "${file.name}" ingested. YOLOv8 detected ${response.detected_objects.length} object(s): [${classesSummary}]. Canvas updated with bounding boxes.`,
+                created_at: new Date().toISOString(),
+                metadata: { image_id: newImagePayload.id },
+              },
+            ]);
+            return;
+          } else if (response.detected_objects && response.detected_objects.length === 0) {
+            setDetectedObjects([]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now()}`,
+                sender_type: 'system',
+                content: `Image "${file.name}" ingested. No distinct objects identified above the current confidence threshold. You may lower the confidence slider or query BLIP directly.`,
                 created_at: new Date().toISOString(),
                 metadata: { image_id: newImagePayload.id },
               },

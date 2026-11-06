@@ -20,7 +20,27 @@ function MainAppContent() {
   const [activeTab, setActiveTab] = useState('vision'); // 'vision' | 'chat' for mobile
   const [activeToast, setActiveToast] = useState(null);
 
-  const { activeSession, messages, activeImage, errorMessage } = useChat();
+  const { activeSession, messages, activeImage, errorMessage, createNewSession, setSelectedObjectId } = useChat();
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        createNewSession();
+        setActiveToast({
+          type: 'info',
+          title: 'Session Initialized',
+          message: 'Created new reconnaissance conversation.',
+        });
+      }
+      if (e.key === 'Escape') {
+        setIsSidebarOpen(false);
+        if (setSelectedObjectId) setSelectedObjectId(null);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createNewSession, setSelectedObjectId]);
 
   useEffect(() => {
     if (errorMessage) {

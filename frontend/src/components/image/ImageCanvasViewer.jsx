@@ -95,9 +95,15 @@ export default function ImageCanvasViewer() {
       // Badge background (above box, or inside if too close to top)
       const badgeY = y - badgeHeight >= 0 ? y - badgeHeight : y;
       ctx.fillStyle = isSelected ? '#0284c7' : colors.stroke;
-      ctx.beginPath();
-      ctx.roundRect(x, badgeY, badgeWidth, badgeHeight, [4, 4, 0, 0]);
-      ctx.fill();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(x, badgeY, badgeWidth, badgeHeight, [4, 4, 0, 0]);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.rect(x, badgeY, badgeWidth, badgeHeight);
+        ctx.fill();
+      }
 
       // Badge text
       ctx.fillStyle = '#ffffff';
