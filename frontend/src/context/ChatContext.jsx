@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { fetchSessions, createSession as apiCreateSession, uploadImage as apiUploadImage, sendChatMessage as apiSendChatMessage } from '../services/api';
+import {
+  fetchSessions,
+  createSession as apiCreateSession,
+  uploadImage as apiUploadImage,
+  sendChatMessage as apiSendChatMessage,
+  detectObjects as apiDetectObjects,
+} from '../services/api';
 
 const ChatContext = createContext();
 
@@ -120,14 +126,34 @@ export function ChatProvider({ children }) {
       // 2. Call backend upload if available
       try {
         const response = await apiUploadImage(file, activeSessionId);
-        if (response && response.detected_objects) {
-          setDetectedObjects(response.detected_objects);
+        if (response) {
+          if (response.id) newImagePayload.id = response.id;
+          if (response.url) newImagePayload.backendUrl = response.url;
+          if (response.detected_objects && response.detected_objects.length > 0) {
+            setDetectedObjects(response.detected_objects);
+            const classesSummary = [
+              ...new Set(response.detected_objects.map((o) => o.class_name)),
+            ].join(', ');
+
+            // Add system confirmation message in chat with real detection count
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `msg-${Date.now()}`,
+                sender_type: 'system',
+                content: `Image "${file.name}" ingested. YOLOv8 detected ${response.detected_objects.length} object(s): [${classesSummary}]. Canvas updated with bounding boxes.`,
+                created_at: new Date().toISOString(),
+                metadata: { image_id: newImagePayload.id },
+              },
+            ]);
+            return;
+          }
         }
       } catch (apiErr) {
-        console.info('Backend detection endpoint connecting or using client preview mode:', apiErr.message);
+        console.info('Backend detection endpoint note:', apiErr.message);
       }
 
-      // Add system confirmation message in chat
+      // Fallback system confirmation message in chat
       setMessages((prev) => [
         ...prev,
         {

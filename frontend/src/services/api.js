@@ -50,6 +50,20 @@ export async function uploadImage(file, sessionId) {
   return response.json();
 }
 
+export async function detectObjects(imageId, confidenceThreshold = 0.35) {
+  const response = await fetch(
+    `${API_BASE_URL}/images/${imageId}/detect?confidence_threshold=${confidenceThreshold}`,
+    {
+      method: 'POST',
+    }
+  );
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Detection failed with status: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function sendChatMessage(sessionId, content, imageId = null) {
   const response = await fetch(`${API_BASE_URL}/chat/message`, {
     method: 'POST',
