@@ -3,6 +3,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ChatProvider, useChat } from './context/ChatContext';
 import Header from './components/common/Header';
 import DashboardLayout from './components/common/DashboardLayout';
+import ChatContainer from './components/chat/ChatContainer';
 import { fetchHealth } from './services/api';
 
 function MainAppContent() {
@@ -60,25 +61,7 @@ function MainAppContent() {
             <p className="text-xs text-slate-500 mt-1">Image uploader & bounding box overlay</p>
           </div>
         }
-        chatPanel={
-          <div className="flex-1 flex flex-col p-4">
-            <div className="font-semibold text-sm text-slate-200 mb-3">AI Dialogue Stream</div>
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-3 rounded-xl text-xs ${
-                    m.sender_type === 'user'
-                      ? 'bg-blue-600 text-white ml-auto max-w-[80%]'
-                      : 'bg-slate-800/90 text-slate-200 mr-auto max-w-[85%] border border-slate-700/60'
-                  }`}
-                >
-                  {m.content}
-                </div>
-              ))}
-            </div>
-          </div>
-        }
+        chatPanel={<ChatContainer />}
       />
     </div>
   );
