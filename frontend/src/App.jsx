@@ -4,6 +4,7 @@ import { ChatProvider, useChat } from './context/ChatContext';
 import Header from './components/common/Header';
 import DashboardLayout from './components/common/DashboardLayout';
 import ChatContainer from './components/chat/ChatContainer';
+import ImageUploader from './components/image/ImageUploader';
 import { fetchHealth } from './services/api';
 
 function MainAppContent() {
@@ -56,9 +57,13 @@ function MainAppContent() {
           </div>
         }
         visionPanel={
-          <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-400">
-            <p className="text-sm font-medium text-slate-300">Vision & Image Canvas Area</p>
-            <p className="text-xs text-slate-500 mt-1">Image uploader & bounding box overlay</p>
+          <div className="flex-1 flex flex-col space-y-4">
+            <ImageUploader />
+            {!activeImage && (
+              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-500">
+                <p className="text-xs">No image loaded. Upload an image above to activate the deep-learning vision canvas.</p>
+              </div>
+            )}
           </div>
         }
         chatPanel={<ChatContainer />}
