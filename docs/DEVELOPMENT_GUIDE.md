@@ -1,77 +1,98 @@
-# Development & Engineering Guide
-
+# Development Guide
 **Project:** Conversational Image Recognition Chatbot  
-**Organisation:** Bharat Electronics Limited (BEL)  
+**Organization:** Bharat Electronics Limited (BEL)
 
 ---
 
-## 1. Prerequisites
-- **macOS:** Apple Silicon (M1/M2/M3/M4) recommended with Metal Performance Shaders (MPS).
-- **Python:** Python 3.11.x (via Homebrew: `brew install python@3.11`).
-- **Node.js:** Node.js v20+ / v24+ with npm.
-- **PostgreSQL:** PostgreSQL 16+ or 18+ (running locally on port 5432).
+## 1. Development Environment
+
+- **Operating System:** macOS (Apple Silicon M-series optimized) / Linux / Windows WSL2
+- **Python Version:** 3.11 (`.venv`)
+- **Node.js Version:** v20+ / v24+
+- **Database:** PostgreSQL 16+ or 18+ on `localhost:5432`
 
 ---
 
-## 2. Environment Setup
+## 2. Directory Structure Overview
 
-### Backend (Python 3.11 Virtual Environment)
+```
+conversational-image-recognition-chatbot/
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # Automated CI pipeline
+├── backend/
+│   ├── alembic/                 # Database migrations
+│   ├── app/
+│   │   ├── api/v1/              # REST Endpoints (health, sessions, images, chat)
+│   │   ├── core/                # Database engine, base models, exceptions, middleware
+│   │   ├── models/              # SQLAlchemy declarative models
+│   │   ├── repositories/        # Repository persistence layer
+│   │   ├── schemas/             # Pydantic v2 data transfer objects
+│   │   ├── services/            # YOLOv8, BLIP VQA, Context Fusion, Image processing
+│   │   ├── utils/               # Structured logging
+│   │   ├── config.py            # Pydantic BaseSettings
+│   │   └── main.py              # FastAPI application factory
+│   ├── tests/                   # Pytest automated test suite (31 tests)
+│   ├── Dockerfile               # Backend container definition
+│   └── requirements.txt         # Production dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── chat/            # ChatContainer, MessageList, MessageInput
+│   │   │   ├── common/          # Header, DashboardLayout, ErrorBoundary, Toast
+│   │   │   ├── image/           # ImageCanvasViewer, ImageUploader, ObjectDetectionList
+│   │   │   └── session/         # SessionSidebar, SessionItem
+│   │   ├── context/             # ThemeContext, ChatContext
+│   │   ├── services/            # Axios API client
+│   │   ├── utils/               # HTML5 canvas bounding box helpers
+│   │   ├── App.jsx              # Main App entrypoint
+│   │   └── main.jsx
+│   ├── Dockerfile               # Frontend multi-stage container
+│   ├── nginx.conf               # Production Nginx reverse proxy
+│   └── package.json
+├── docs/                        # Specifications and architectural blueprints
+├── docker-compose.yml           # Multi-container orchestration
+└── README.md                    # System documentation
+```
+
+---
+
+## 3. Running Backend Locally
+
 ```bash
-# Create isolated environment using Python 3.11
-/opt/homebrew/opt/python@3.11/bin/python3 -m venv .venv
-
-# Activate environment
+# Activate isolated Python 3.11 virtual environment
 source .venv/bin/activate
 
-# Install dependencies
-pip install --upgrade pip setuptools wheel
-pip install -r backend/requirements.txt
-```
-
-### PostgreSQL Database
-```bash
-# Verify PostgreSQL is running
-brew services list
-
-# Create the application database
-createdb bel_chatbot_db
-```
-
-### Frontend (React + Vite)
-```bash
-cd frontend
-npm install
-```
-
----
-
-## 3. Running the Application Locally
-
-### Running Backend:
-```bash
-source .venv/bin/activate
+# Execute migrations
 cd backend
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-Interactive API docs are accessible at: `http://127.0.0.1:8000/docs`
+alembic upgrade head
 
-### Running Frontend:
+# Start development server
+uvicorn app.main:app --reload --port 8000
+```
+
+---
+
+## 4. Running Frontend Locally
+
 ```bash
 cd frontend
 npm run dev
 ```
-Frontend interface is accessible at: `http://localhost:5173`
 
 ---
 
-## 4. Hardware Verification & Model Benchmarking
-Run the benchmarking script to verify Apple MPS throughput:
+## 5. Running Automated Tests
+
 ```bash
+# Run complete backend test suite (31 tests)
 source .venv/bin/activate
-python scripts/benchmark_hardware.py
+pytest backend/tests/ -v
+
+# Run single test module
+pytest backend/tests/test_e2e_integration.py -v
+
+# Build frontend production bundle
+cd frontend
+npm run build
 ```
-
----
-
-## 5. Git Commit Protocol
-Commit messages must adhere strictly to the 35-commit milestone roadmap outlined in `AGENTS.md`. Never commit credentials, `.env` files, or binary model weights directly.

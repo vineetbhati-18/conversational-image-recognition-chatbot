@@ -1,93 +1,198 @@
-# API Specification (FastAPI REST v1)
-
+# REST API Specification (FastAPI v1)
+**Project:** Conversational Image Recognition Chatbot  
+**Organization:** Bharat Electronics Limited (BEL)  
 **Base URL:** `/api/v1`
 
 ---
 
-## 1. Health & System
-- `GET /health`
-  - Response: `{"status": "healthy", "device": "mps", "yolo_ready": true, "vqa_ready": true, "database": "connected"}`
+## 1. System & Health
+
+### `GET /api/v1/health`
+Checks backend and model availability.
+- **Headers:** None required
+- **Response `200 OK`:**
+  ```json
+  {
+    "status": "healthy",
+    "app": "BEL Conversational Image Recognition Backend",
+    "device": "mps",
+    "yolo_ready": true,
+    "blip_ready": true,
+    "timestamp": "2026-11-06T14:15:30.123456"
+  }
+  ```
 
 ---
 
 ## 2. Session Management
-- `POST /sessions`
-  - Creates a new chat session.
-  - Request: `{"title": "Optional session title"}`
-  - Response: `{"id": "uuid", "title": "New Session", "created_at": "ISO-8601"}`
 
-- `GET /sessions`
-  - Lists all existing conversation sessions sorted by most recent.
+### `POST /api/v1/sessions`
+Initializes a new conversation session.
+- **Request Body:**
+  ```json
+  {
+    "title": "Tactical Reconnaissance Mission #1"
+  }
+  ```
+- **Response `201 Created`:**
+  ```json
+  {
+    "id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+    "title": "Tactical Reconnaissance Mission #1",
+    "created_at": "2026-11-06T14:15:30.123456Z",
+    "updated_at": "2026-11-06T14:15:30.123456Z"
+  }
+  ```
 
-- `GET /sessions/{session_id}`
-  - Retrieves a specific session with its full message history and associated images.
-
-- `DELETE /sessions/{session_id}`
-  - Deletes a session and cascades to all associated messages, images, and telemetry.
-
----
-
-## 3. Image Upload & Vision Telemetry
-- `POST /images/upload`
-  - Multipart form-data: `file` (image binary), `session_id` (UUID).
-  - Validation: Magic byte inspection (JPEG, PNG, WebP), file size limit (15MB).
-  - Processing: Computes dimensions, persists locally under `backend/uploads/`, triggers YOLOv8s detection pass.
-  - Response:
-    ```json
+### `GET /api/v1/sessions`
+Lists conversation sessions ordered by most recent activity.
+- **Query Parameters:**
+  - `limit` (integer, default: 50)
+  - `offset` (integer, default: 0)
+- **Response `200 OK`:**
+  ```json
+  [
     {
-      "image_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "filename": "recon_sample.jpg",
-      "url": "/api/v1/images/3fa85f64-5717-4562-b3fc-2c963f66afa6/file",
-      "width": 1920,
-      "height": 1080,
-      "detected_objects": [
-        {
-          "id": "uuid",
-          "class_name": "truck",
-          "confidence": 0.924,
-          "bbox": {
-            "x_min": 120.5,
-            "y_min": 240.0,
-            "x_max": 450.2,
-            "y_max": 680.1
-          }
-        }
-      ]
+      "id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+      "title": "Tactical Reconnaissance Mission #1",
+      "created_at": "2026-11-06T14:15:30.123456Z",
+      "updated_at": "2026-11-06T14:15:30.123456Z"
     }
-    ```
+  ]
+  ```
 
-- `GET /images/{image_id}/file`
-  - Streams the raw image bytes.
-
-- `POST /images/{image_id}/detect`
-  - Re-runs object detection with an updated confidence threshold slider (e.g., `confidence=0.5`).
-
----
-
-## 4. Conversational Chat & VQA
-- `POST /chat/message`
-  - Sends a user message and returns context-aware multi-turn assistant answer.
-  - Request:
-    ```json
-    {
-      "session_id": "uuid",
-      "image_id": "uuid",
-      "content": "What is the vehicle on the left side?"
-    }
-    ```
-  - Response:
-    ```json
-    {
-      "id": "uuid",
-      "session_id": "uuid",
-      "sender_type": "assistant",
-      "content": "The vehicle on the left is a green military-style truck detected with 92.4% confidence.",
-      "created_at": "ISO-8601",
-      "metadata": {
-        "vqa_answer": "truck",
-        "detected_classes": ["truck", "person"],
-        "latency_ms": 48
+### `GET /api/v1/sessions/{session_id}`
+Retrieves session details including full message history, associated images, and detected objects.
+- **Response `200 OK`:**
+  ```json
+  {
+    "id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+    "title": "Tactical Reconnaissance Mission #1",
+    "created_at": "2026-11-06T14:15:30.123456Z",
+    "updated_at": "2026-11-06T14:15:30.123456Z",
+    "messages": [
+      {
+        "id": "893c5d64-e5be-443b-8ea9-8d4889c258d4",
+        "session_id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+        "image_id": "c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b",
+        "sender_type": "user",
+        "content": "What vehicles do you see?",
+        "metadata": {},
+        "created_at": "2026-11-06T14:16:00.123456Z"
       }
-    }
-    ```
+    ],
+    "images": [
+      {
+        "id": "c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b",
+        "session_id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+        "filename": "perimeter_recon.jpg",
+        "file_size_bytes": 1048576,
+        "width": 1920,
+        "height": 1080,
+        "mime_type": "image/jpeg",
+        "url": "/uploads/c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b.jpg",
+        "detected_objects": [
+          {
+            "id": "3bf540a8-b648-4cb1-afbc-40d6c5478ce1",
+            "class_name": "truck",
+            "confidence": 0.942,
+            "bbox": {
+              "x_min": 120.0,
+              "y_min": 250.0,
+              "x_max": 450.0,
+              "y_max": 680.0
+            }
+          }
+        ],
+        "created_at": "2026-11-06T14:15:45.123456Z"
+      }
+    ]
+  }
+  ```
+
+### `DELETE /api/v1/sessions/{session_id}`
+Deletes session and cascades to all child messages, images, and detections.
+- **Response `204 No Content`**
+
+---
+
+## 3. Image Upload & Detection
+
+### `POST /api/v1/images/upload`
+Uploads an image, verifies binary magic bytes, runs YOLOv8s deep-learning detection, and returns normalized bounding box telemetry.
+- **Content-Type:** `multipart/form-data`
+- **Fields:**
+  - `file`: binary file (JPEG, PNG, WebP; max 15MB)
+  - `session_id`: UUID
+- **Response `201 Created`:**
+  ```json
+  {
+    "id": "c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b",
+    "session_id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+    "filename": "perimeter_recon.jpg",
+    "file_size_bytes": 1048576,
+    "width": 1920,
+    "height": 1080,
+    "mime_type": "image/jpeg",
+    "url": "/uploads/c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b.jpg",
+    "detected_objects": [
+      {
+        "id": "3bf540a8-b648-4cb1-afbc-40d6c5478ce1",
+        "class_name": "truck",
+        "confidence": 0.942,
+        "bbox": {
+          "x_min": 120.0,
+          "y_min": 250.0,
+          "x_max": 450.0,
+          "y_max": 680.0
+        }
+      }
+    ],
+    "created_at": "2026-11-06T14:15:45.123456Z"
+  }
+  ```
+
+### `POST /api/v1/images/{image_id}/detect`
+Re-runs detection on an uploaded image with a user-specified confidence threshold.
+- **Request Body:**
+  ```json
+  {
+    "confidence_threshold": 0.50
+  }
+  ```
+- **Response `200 OK`:** Updated `ImageResponse`
+
+### `GET /api/v1/images/{image_id}/file`
+Streams the stored image file.
+- **Response `200 OK`:** Binary stream (`image/jpeg`, `image/png`, or `image/webp`)
+
+---
+
+## 4. Multi-Turn Conversational Chat
+
+### `POST /api/v1/chat/message`
+Submits a user message and returns context-aware responses synthesized from YOLO detections, spatial sector telemetry, BLIP VQA, and prior conversation history.
+- **Request Body:**
+  ```json
+  {
+    "session_id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+    "image_id": "c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b",
+    "content": "Where is the vehicle located?"
+  }
+  ```
+- **Response `200 OK`:**
+  ```json
+  {
+    "id": "f5120ca2-4811-4ad9-bf95-5858cf85d992",
+    "session_id": "e45a2db3-4f93-4a58-86d4-8393e507b97c",
+    "image_id": "c1f6b158-9ffb-4a6c-9c3a-8673f84f3c7b",
+    "sender_type": "assistant",
+    "content": "The truck is located in the center-left quadrant of the image (confidence: 94.2%).",
+    "metadata": {
+      "detected_classes": ["truck"],
+      "vqa_answer": null,
+      "latency_ms": 35.4
+    },
+    "created_at": "2026-11-06T14:16:05.123456Z"
+  }
+  ```
