@@ -6,6 +6,8 @@ import DashboardLayout from './components/common/DashboardLayout';
 import ChatContainer from './components/chat/ChatContainer';
 import ImageUploader from './components/image/ImageUploader';
 import ImageCanvasViewer from './components/image/ImageCanvasViewer';
+import ConfidenceSlider from './components/image/ConfidenceSlider';
+import ObjectDetectionList from './components/image/ObjectDetectionList';
 import { fetchHealth } from './services/api';
 
 function MainAppContent() {
@@ -61,7 +63,11 @@ function MainAppContent() {
           <div className="flex-1 flex flex-col space-y-4">
             <ImageUploader />
             {activeImage ? (
-              <ImageCanvasViewer />
+              <>
+                <ImageCanvasViewer />
+                <ConfidenceSlider />
+                <ObjectDetectionList />
+              </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-500">
                 <p className="text-xs">No image loaded. Upload an image above to activate the deep-learning vision canvas.</p>
