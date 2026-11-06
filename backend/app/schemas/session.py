@@ -1,11 +1,9 @@
 from pydantic import BaseModel, Field, ConfigDict
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, List, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from app.schemas.chat import MessageResponse
-    from app.schemas.image import ImageResponse
+from typing import Optional, List
+from app.schemas.chat import MessageResponse
+from app.schemas.image import ImageResponse
 
 
 class SessionBase(BaseModel):
@@ -30,7 +28,10 @@ class SessionResponse(SessionBase):
 
 
 class SessionDetailResponse(SessionResponse):
-    messages: List["MessageResponse"] = []
-    images: List["ImageResponse"] = []
+    messages: List[MessageResponse] = []
+    images: List[ImageResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+SessionDetailResponse.model_rebuild()

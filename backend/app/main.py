@@ -7,7 +7,8 @@ import logging
 
 from app.config import get_settings
 from app.core.exceptions import AppException, app_exception_handler, global_exception_handler
-from app.core.database import engine
+from app.core.database import engine, init_db
+import app.models  # Register all models for create_all
 from app.api.v1 import api_router
 
 logger = logging.getLogger("bel_chatbot")
@@ -26,12 +27,12 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     logger.info(f"Initialized image storage at: {settings.UPLOAD_DIR}")
 
-    # 2. Verify Database Connection
+    # 2. Verify Database Connection and initialize schema
     try:
-        async with engine.connect() as conn:
-            logger.info("Successfully connected to PostgreSQL engine.")
+        await init_db()
+        logger.info("Successfully initialized database tables in PostgreSQL.")
     except Exception as e:
-        logger.warning(f"Database connection warning on startup: {e}")
+        logger.warning(f"Database schema initialization warning: {e}")
 
     yield
 
@@ -77,6 +78,7 @@ def create_app() -> FastAPI:
     async def root():
         return {
             "app": settings.APP_NAME,
+            "message": "Welcome to BEL Conversational Image Recognition API",
             "version": settings.APP_VERSION,
             "status": "active",
             "docs": "/docs",
