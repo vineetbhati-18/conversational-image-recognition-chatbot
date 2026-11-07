@@ -127,6 +127,10 @@ def create_app() -> FastAPI:
             "health": f"{settings.API_V1_PREFIX}/health",
         }
 
+    @app.get("/healthz")
+    def healthz():
+        return {"status": "ok"}
+
     return app
 
 

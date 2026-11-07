@@ -10,6 +10,15 @@ router = APIRouter()
 settings = get_settings()
 
 
+@router.get("/live")
+def get_liveness():
+    """
+    Ultra-fast, non-blocking liveness probe for cloud load balancers (Render, Kubernetes).
+    Returns instantly in < 1ms with zero database overhead.
+    """
+    return {"status": "ok", "app": settings.APP_NAME}
+
+
 @router.get("")
 async def get_health_status(db: AsyncSession = Depends(get_db)):
     """
