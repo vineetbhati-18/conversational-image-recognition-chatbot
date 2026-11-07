@@ -56,6 +56,8 @@ class BLIPService:
         img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
         del img_copy
         buf.close()
+        from app.utils.memory import trim_process_memory
+        trim_process_memory()
 
         headers = {
             "Authorization": f"Bearer {self.hf_token.strip()}",

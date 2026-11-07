@@ -1,12 +1,12 @@
 import os
 from pathlib import Path
 from uuid import uuid4
-import aiofiles
 from PIL import Image
 import io
 import logging
 from app.core.exceptions import ImageProcessingError
 from app.config import get_settings
+from app.utils.memory import trim_process_memory
 
 logger = logging.getLogger("bel_chatbot.image_service")
 settings = get_settings()
@@ -42,6 +42,7 @@ async def validate_and_save_image(
     """
     Validates file size, magic bytes signature, and Pillow readability,
     then saves to local storage with a secure UUID.
+    Applies in-place streaming downscale to max 800px to protect 512MB RAM environments.
     """
     # 1. Size Validation
     file_size = len(file_bytes)
@@ -62,34 +63,7 @@ async def validate_and_save_image(
             details={"detected_mime": detected_mime},
         )
 
-    # 3. Pillow Integrity Check & Dimension Extraction
-    try:
-        with Image.open(io.BytesIO(file_bytes)) as pil_img:
-            pil_img.verify()
-
-        # Re-open after verify() to read dimensions
-        with Image.open(io.BytesIO(file_bytes)) as pil_img:
-            width, height = pil_img.size
-            format_name = pil_img.format
-            # Downscale images to max 800px to strictly protect 512MB container memory
-            if width > 800 or height > 800:
-                img_copy = pil_img.copy()
-                img_copy.thumbnail((800, 800), Image.Resampling.BILINEAR)
-                buf = io.BytesIO()
-                save_fmt = format_name if format_name in ("JPEG", "PNG", "WEBP") else "JPEG"
-                img_copy.save(buf, format=save_fmt, quality=85)
-                file_bytes = buf.getvalue()
-                width, height = img_copy.size
-                file_size = len(file_bytes)
-                del img_copy
-                buf.close()
-    except Exception as e:
-        raise ImageProcessingError(
-            f"Corrupted or invalid image data: {str(e)}",
-            details={"original_filename": original_filename},
-        )
-
-    # 4. Secure File Persistence
+    # 3. Secure File Path Preparation
     ext = Path(original_filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         ext = ".jpg" if detected_mime == "image/jpeg" else ".png" if detected_mime == "image/png" else ".webp"
@@ -98,10 +72,49 @@ async def validate_and_save_image(
     secure_filename = f"{image_id}{ext}"
     storage_path = settings.UPLOAD_DIR / secure_filename
 
-    async with aiofiles.open(storage_path, "wb") as f:
-        await f.write(file_bytes)
+    # 4. Streamlined In-Place Pillow Processing & Direct Disk Persistence
+    try:
+        bio = io.BytesIO(file_bytes)
+        with Image.open(bio) as pil_img:
+            # Handle orientation EXIF metadata if present
+            try:
+                from PIL import ImageOps
+                pil_img = ImageOps.exif_transpose(pil_img)
+            except Exception:
+                pass
 
-    logger.info(f"Persisted image {image_id} ({width}x{height}, {file_size} bytes) at {storage_path}")
+            orig_w, orig_h = pil_img.size
+            format_name = pil_img.format or ("JPEG" if detected_mime == "image/jpeg" else "PNG")
+
+            # In-place downscale if image exceeds 800px on any dimension
+            if orig_w > 800 or orig_h > 800:
+                pil_img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+
+            # Ensure RGB color mode for JPEG persistence
+            save_fmt = "JPEG" if detected_mime == "image/jpeg" or format_name.upper() in ("JPEG", "JPG") else ("PNG" if detected_mime == "image/png" else "WEBP")
+            if save_fmt == "JPEG" and pil_img.mode in ("RGBA", "P"):
+                pil_img = pil_img.convert("RGB")
+
+            width, height = pil_img.size
+
+            # Save directly to disk (streaming directly to filesystem, no duplicate RAM buffer)
+            pil_img.save(str(storage_path), format=save_fmt, quality=85, optimize=True)
+
+        bio.close()
+        del bio
+    except ImageProcessingError:
+        raise
+    except Exception as e:
+        raise ImageProcessingError(
+            f"Corrupted or invalid image data: {str(e)}",
+            details={"original_filename": original_filename},
+        )
+    finally:
+        trim_process_memory()
+
+    # Read actual saved size on disk
+    saved_size = storage_path.stat().st_size
+    logger.info(f"Persisted image {image_id} ({width}x{height}, {saved_size} bytes) at {storage_path}")
 
     return {
         "id": image_id,
@@ -111,7 +124,7 @@ async def validate_and_save_image(
         "url": f"/uploads/{secure_filename}",
         "width": width,
         "height": height,
-        "file_size_bytes": file_size,
+        "file_size_bytes": saved_size,
         "mime_type": detected_mime,
         "format": format_name,
     }

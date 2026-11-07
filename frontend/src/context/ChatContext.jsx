@@ -9,6 +9,7 @@ import {
   detectObjects as apiDetectObjects,
   resolveMediaUrl,
 } from '../services/api';
+import { compressImageForUpload } from '../utils/imageCompressor';
 
 const ChatContext = createContext();
 
@@ -320,8 +321,11 @@ export function ChatProvider({ children }) {
       };
       setActiveImage(newImagePayload);
 
+      // Pre-process client image if oversized to eliminate upload timeout and RAM spikes
+      const uploadFile = await compressImageForUpload(file);
+
       // Call backend upload endpoint
-      const response = await apiUploadImage(file, targetSessionId);
+      const response = await apiUploadImage(uploadFile, targetSessionId);
       if (response) {
         if (response.id) newImagePayload.id = response.id;
         if (response.url) {

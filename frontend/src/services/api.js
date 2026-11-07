@@ -36,50 +36,72 @@ export function resolveMediaUrl(path) {
   return `${cleanBase}${cleanPath}`;
 }
 
-export async function fetchHealth() {
-  const response = await fetch(`${API_BASE_URL}/health`);
-  if (!response.ok) {
-    throw new Error(`Health check failed with status: ${response.status}`);
+/**
+ * Robust fetch wrapper that inspects network failures, timeouts, and detailed error payloads.
+ */
+async function safeApiFetch(url, options = {}) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+      throw new Error(
+        'Backend connection failed. The server may be waking up from free-tier sleep or rebooting. Please try again in a few moments.'
+      );
+    }
+    throw err;
   }
+
+  if (!response.ok) {
+    let errorMessage = '';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error || errorData.detail || errorData.message || JSON.stringify(errorData);
+    } catch {
+      const text = await response.text().catch(() => '');
+      errorMessage = text || `HTTP ${response.status} ${response.statusText}`;
+    }
+    throw new Error(errorMessage || `Request failed with status ${response.status}`);
+  }
+
   return response.json();
+}
+
+export async function fetchHealth() {
+  return safeApiFetch(`${API_BASE_URL}/health`);
 }
 
 export async function fetchSessions() {
-  const response = await fetch(`${API_BASE_URL}/sessions`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch sessions: ${response.status}`);
-  }
-  return response.json();
+  return safeApiFetch(`${API_BASE_URL}/sessions`);
 }
 
 export async function fetchSessionDetail(sessionId) {
-  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch session detail: ${response.status}`);
-  }
-  return response.json();
+  return safeApiFetch(`${API_BASE_URL}/sessions/${sessionId}`);
 }
 
 export async function createSession(title = 'New Conversation') {
-  const response = await fetch(`${API_BASE_URL}/sessions`, {
+  return safeApiFetch(`${API_BASE_URL}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
   });
-  if (!response.ok) {
-    throw new Error(`Failed to create session: ${response.status}`);
-  }
-  return response.json();
 }
 
 export async function deleteSession(sessionId) {
-  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
-    method: 'DELETE',
-  });
-  if (!response.ok && response.status !== 204) {
-    throw new Error(`Failed to delete session: ${response.status}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok && response.status !== 204) {
+      throw new Error(`Failed to delete session: ${response.status}`);
+    }
+    return true;
+  } catch (err) {
+    if (err.name === 'TypeError' && err.message.toLowerCase().includes('fetch')) {
+      throw new Error('Connection lost while deleting session.');
+    }
+    throw err;
   }
-  return true;
 }
 
 export async function uploadImage(file, sessionId) {
@@ -89,29 +111,19 @@ export async function uploadImage(file, sessionId) {
     formData.append('session_id', sessionId);
   }
 
-  const response = await fetch(`${API_BASE_URL}/images/upload`, {
+  return safeApiFetch(`${API_BASE_URL}/images/upload`, {
     method: 'POST',
     body: formData,
   });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Upload failed with status: ${response.status}`);
-  }
-  return response.json();
 }
 
 export async function detectObjects(imageId, confidenceThreshold = 0.35) {
-  const response = await fetch(
+  return safeApiFetch(
     `${API_BASE_URL}/images/${imageId}/detect?confidence_threshold=${confidenceThreshold}`,
     {
       method: 'POST',
     }
   );
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Detection failed with status: ${response.status}`);
-  }
-  return response.json();
 }
 
 export async function sendChatMessage(sessionId, content, imageId = null, confidenceThreshold = null) {
@@ -124,14 +136,9 @@ export async function sendChatMessage(sessionId, content, imageId = null, confid
     payload.confidence_threshold = confidenceThreshold;
   }
 
-  const response = await fetch(`${API_BASE_URL}/chat/message`, {
+  return safeApiFetch(`${API_BASE_URL}/chat/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `Message failed with status: ${response.status}`);
-  }
-  return response.json();
 }

@@ -148,13 +148,8 @@ class YOLOService:
         del boxes
         del result
         del results
-        gc.collect()
-        try:
-            import ctypes
-            libc = ctypes.CDLL("libc.so.6")
-            libc.malloc_trim(0)
-        except Exception:
-            pass
+        from app.utils.memory import trim_process_memory
+        trim_process_memory()
 
         return {
             "detections": detections,

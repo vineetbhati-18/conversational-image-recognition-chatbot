@@ -38,6 +38,9 @@ async def upload_image_endpoint(
         file_bytes=contents,
         original_filename=file.filename or "uploaded_image.jpg",
     )
+    del contents
+    from app.utils.memory import trim_process_memory
+    trim_process_memory()
 
     # 3. Save Image record via Repository
     db_image = await ImageRepository.create(
