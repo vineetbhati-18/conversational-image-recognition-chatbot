@@ -123,7 +123,15 @@ class ObjectColorAnalyzer:
         try:
             p = Path(image_path)
             if not p.is_file():
-                return {"color_phrase": "unknown", "error": "Image file not found"}
+                from app.config import get_settings
+                alt_path = get_settings().UPLOAD_DIR / p.name
+                if alt_path.is_file():
+                    p = alt_path
+                else:
+                    return {
+                        "color_phrase": None,
+                        "error": "Image file from an earlier server session was cleared upon reboot. Please click 'Replace' or re-upload to analyze colors.",
+                    }
 
             with Image.open(str(p)) as full_img:
                 img_w, img_h = full_img.size

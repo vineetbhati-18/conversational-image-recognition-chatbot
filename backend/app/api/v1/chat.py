@@ -131,9 +131,11 @@ async def send_chat_message(
                             matching_objs[0]["bbox"],
                             target_dimensions=(img_w, img_h)
                         )
-                        if color_res and color_res.get("color_phrase") and color_res["color_phrase"] != "indeterminate":
+                        if color_res and color_res.get("color_phrase") and color_res["color_phrase"] not in ("unknown", "indeterminate"):
                             vqa_answer = color_res["color_phrase"]
                             vqa_error = None
+                        elif color_res.get("error"):
+                            vqa_error = color_res["error"]
 
     # 4. Generate Synthesized Response via Fusion Engine
     fused = fusion_engine.generate_fused_response(
