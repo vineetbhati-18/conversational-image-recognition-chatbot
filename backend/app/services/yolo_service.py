@@ -96,7 +96,7 @@ class YOLOService:
             results = self.model.predict(
                 source=image_source,
                 conf=conf_threshold,
-                imgsz=320,
+                imgsz=640,
                 device=self.device,
                 verbose=False,
             )
