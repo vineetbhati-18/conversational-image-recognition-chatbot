@@ -101,8 +101,9 @@ async def send_chat_message(
             # Route object identification, counting, and spatial queries directly to structured YOLO data.
             # Only execute BLIP VQA for visual attributes, color, appearance, and scene descriptions.
             if intent in (QuestionIntent.VISUAL_ATTRIBUTE, QuestionIntent.GENERAL):
+                import asyncio
                 blip = get_blip_service()
-                vqa_res = blip.answer_question(image.storage_path, resolved_query)
+                vqa_res = await asyncio.to_thread(blip.answer_question, image.storage_path, resolved_query)
                 vqa_answer = vqa_res["answer"]
                 vqa_latency = vqa_res["latency_ms"]
 
