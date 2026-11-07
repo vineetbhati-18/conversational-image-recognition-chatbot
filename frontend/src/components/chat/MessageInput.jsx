@@ -7,7 +7,7 @@ const SUGGESTIONS = [
   'Where are they located?',
 ];
 
-export default function MessageInput({ onSendMessage, isLoading, disabled }) {
+export default function MessageInput({ onSendMessage, isLoading, isUploading }) {
   const [input, setInput] = useState('');
   const textareaRef = useRef(null);
 
@@ -20,7 +20,7 @@ export default function MessageInput({ onSendMessage, isLoading, disabled }) {
 
   const handleSubmit = (e) => {
     e?.preventDefault();
-    if (!input.trim() || isLoading || disabled) return;
+    if (!input.trim() || isLoading) return;
     onSendMessage(input.trim());
     setInput('');
     if (textareaRef.current) {
@@ -36,7 +36,7 @@ export default function MessageInput({ onSendMessage, isLoading, disabled }) {
   };
 
   const applySuggestion = (suggestion) => {
-    if (isLoading || disabled) return;
+    if (isLoading) return;
     onSendMessage(suggestion);
   };
 
@@ -49,7 +49,7 @@ export default function MessageInput({ onSendMessage, isLoading, disabled }) {
             key={idx}
             type="button"
             onClick={() => applySuggestion(s)}
-            disabled={isLoading || disabled}
+            disabled={isLoading}
             className="shrink-0 px-2 py-0.5 rounded-md bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[10px]"
           >
             {s}
@@ -64,25 +64,18 @@ export default function MessageInput({ onSendMessage, isLoading, disabled }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={disabled || isLoading}
-          placeholder={
-            isLoading
-              ? 'Analyzing visual telemetry...'
-              : disabled
-              ? 'Processing image / loading...'
-              : 'Ask a question about the image...'
-          }
+          placeholder="Ask a question about the image..."
           rows={1}
-          className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 pr-9 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/80 resize-none transition-colors disabled:opacity-50"
+          className="w-full bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 pr-9 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/80 resize-none transition-colors"
         />
 
         <button
           type="submit"
-          disabled={!input.trim() || isLoading || disabled}
+          disabled={!input.trim() || isLoading}
           className="absolute right-1.5 bottom-1.5 p-1 rounded-md bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white transition-colors"
-          title="Send"
+          title={isLoading ? 'Analyzing...' : isUploading ? 'Processing upload...' : 'Send'}
         >
-          {isLoading ? (
+          {isLoading || isUploading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Send className="w-3.5 h-3.5" />

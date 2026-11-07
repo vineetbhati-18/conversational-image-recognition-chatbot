@@ -38,7 +38,7 @@ export default function ChatContainer() {
       <MessageInput
         onSendMessage={sendMessage}
         isLoading={isLoading}
-        disabled={isSessionLoading || isUploading}
+        isUploading={isUploading}
       />
     </div>
   );
