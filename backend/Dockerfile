@@ -22,11 +22,12 @@ RUN python scripts/preload_models.py
 # Copy application source code and migrations
 COPY . /app/
 
-# Environment defaults
+# Environment defaults & glibc arena control to prevent Linux container memory bloat
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     DEVICE_OVERRIDE=cpu \
+    MALLOC_ARENA_MAX=2 \
     OMP_NUM_THREADS=2 \
     OPENBLAS_NUM_THREADS=2 \
     MKL_NUM_THREADS=2 \

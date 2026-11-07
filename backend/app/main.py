@@ -1,5 +1,8 @@
 import os
 
+# Limit glibc memory arenas to prevent memory fragmentation in 512MB Linux containers
+os.environ["MALLOC_ARENA_MAX"] = "2"
+
 # Balanced threading for CPU inference in containerized environments (Render Free)
 os.environ["OMP_NUM_THREADS"] = "2"
 os.environ["OPENBLAS_NUM_THREADS"] = "2"

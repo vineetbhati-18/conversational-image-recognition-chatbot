@@ -71,6 +71,16 @@ async def validate_and_save_image(
         with Image.open(io.BytesIO(file_bytes)) as pil_img:
             width, height = pil_img.size
             format_name = pil_img.format
+            # Downscale oversized images to max 1280px to protect 512MB container memory
+            if width > 1280 or height > 1280:
+                img_copy = pil_img.copy()
+                img_copy.thumbnail((1280, 1280), Image.Resampling.BILINEAR)
+                buf = io.BytesIO()
+                save_fmt = format_name if format_name in ("JPEG", "PNG", "WEBP") else "JPEG"
+                img_copy.save(buf, format=save_fmt, quality=88)
+                file_bytes = buf.getvalue()
+                width, height = img_copy.size
+                file_size = len(file_bytes)
     except Exception as e:
         raise ImageProcessingError(
             f"Corrupted or invalid image data: {str(e)}",

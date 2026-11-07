@@ -143,7 +143,14 @@ class YOLOService:
         logger.info(
             f"YOLO detected {len(detections)} objects on {self.device.upper()} in {latency_ms:.2f}ms"
         )
+        del results
         gc.collect()
+        try:
+            import ctypes
+            libc = ctypes.CDLL("libc.so.6")
+            libc.malloc_trim(0)
+        except Exception:
+            pass
 
         return {
             "detections": detections,
