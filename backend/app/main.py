@@ -1,8 +1,30 @@
+import os
+
+# Enforce strict single-threading for all numerical and computer vision libraries
+# Essential for containerized environments (Render 512MB RAM) on multi-core host nodes
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+try:
+    import cv2
+    cv2.setNumThreads(1)
+except Exception:
+    pass
+
+try:
+    import torch
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+except Exception:
+    pass
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 import logging
 
 from app.config import get_settings
@@ -38,9 +60,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database schema initialization warning: {e}")
 
+    # 3. Warm up YOLO object detection model at startup
+    try:
+        from app.services.yolo_service import get_yolo_service
+        yolo = get_yolo_service()
+        yolo.load_model()
+        logger.info("Successfully pre-warmed YOLO model.")
+    except Exception as e:
+        logger.warning(f"YOLO pre-warm warning: {e}")
+
     yield
 
-    # 3. Graceful shutdown
+    # 4. Graceful shutdown
     await engine.dispose()
     logger.info("Database connection pool disposed.")
 
