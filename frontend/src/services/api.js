@@ -2,7 +2,18 @@
  * API Service Client for BEL Conversational Image Recognition Backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const DEFAULT_PROD_API = 'https://bel-chatbot-api.onrender.com/api/v1';
+const DEFAULT_PROD_BACKEND = 'https://bel-chatbot-api.onrender.com';
+
+const isProductionHost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost');
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD || isProductionHost
+    ? DEFAULT_PROD_API
+    : '/api/v1');
 
 /**
  * Resolves static media paths to absolute URLs in production cloud environments.
@@ -16,7 +27,7 @@ export function resolveMediaUrl(path) {
     import.meta.env.VITE_BACKEND_URL ||
     (import.meta.env.VITE_API_BASE_URL
       ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, '')
-      : '');
+      : (import.meta.env.PROD || isProductionHost ? DEFAULT_PROD_BACKEND : ''));
   if (!backendBase) {
     return path;
   }
