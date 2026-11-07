@@ -30,9 +30,9 @@ class YOLOService:
 
         logger.info(f"Loading YOLOv8 weights ({self.model_name}) on device: {self.device.upper()}...")
         try:
-            # Balance threading for CPU inference in containerized environments
+            # Single-thread execution to prevent CPU thrashing on fractional cloud containers
             try:
-                torch.set_num_threads(2)
+                torch.set_num_threads(1)
                 torch.set_num_interop_threads(1)
             except Exception:
                 pass

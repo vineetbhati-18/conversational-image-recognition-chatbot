@@ -28,9 +28,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     DEVICE_OVERRIDE=cpu \
     MALLOC_ARENA_MAX=2 \
-    OMP_NUM_THREADS=2 \
-    OPENBLAS_NUM_THREADS=2 \
-    MKL_NUM_THREADS=2 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
     PORT=8000
 
 # Create uploads directory for persistent storage mount

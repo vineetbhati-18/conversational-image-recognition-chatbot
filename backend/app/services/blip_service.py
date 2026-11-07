@@ -1,5 +1,4 @@
 import torch
-from transformers import BlipProcessor, BlipForQuestionAnswering
 from PIL import Image
 import time
 import logging
@@ -8,9 +7,12 @@ import os
 import base64
 import io
 import requests
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
 from pathlib import Path
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from transformers import BlipProcessor, BlipForQuestionAnswering
 
 logger = logging.getLogger("bel_chatbot.blip_service")
 settings = get_settings()
@@ -28,8 +30,8 @@ class BLIPService:
     def __init__(self, model_name: Optional[str] = None):
         self.model_name = model_name or settings.VQA_MODEL_NAME
         self.device = settings.INFERENCE_DEVICE
-        self.processor: Optional[BlipProcessor] = None
-        self.model: Optional[BlipForQuestionAnswering] = None
+        self.processor = None
+        self.model = None
         self._is_loaded = False
         self.hf_token = os.getenv("HF_TOKEN") or getattr(settings, "HF_TOKEN", None)
 
@@ -106,6 +108,7 @@ class BLIPService:
             except Exception:
                 pass
 
+            from transformers import BlipProcessor, BlipForQuestionAnswering
             self.processor = BlipProcessor.from_pretrained(self.model_name)
             self.model = BlipForQuestionAnswering.from_pretrained(self.model_name)
 
