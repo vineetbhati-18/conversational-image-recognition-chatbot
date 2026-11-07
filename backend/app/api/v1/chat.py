@@ -118,6 +118,23 @@ async def send_chat_message(
                 vqa_error = vqa_res.get("error")
                 vqa_latency = vqa_res.get("latency_ms", 0.0)
 
+                # Color analysis: If external VQA is unconfigured or failed, extract genuine color signature directly from pixel data
+                is_color_q = any(w in payload.content.lower() for w in ["color", "colour", "shade", "paint", "tint"])
+                if is_color_q and target_class and not vqa_answer:
+                    classes_to_match = set(matched_classes or [target_class])
+                    matching_objs = [d for d in yolo_detections if d.get("class_name") in classes_to_match]
+                    if matching_objs:
+                        from app.services.color_analyzer import get_color_analyzer
+                        analyzer = get_color_analyzer()
+                        color_res = analyzer.analyze_object_color_from_file(
+                            image.storage_path,
+                            matching_objs[0]["bbox"],
+                            target_dimensions=(img_w, img_h)
+                        )
+                        if color_res and color_res.get("color_phrase") and color_res["color_phrase"] != "indeterminate":
+                            vqa_answer = color_res["color_phrase"]
+                            vqa_error = None
+
     # 4. Generate Synthesized Response via Fusion Engine
     fused = fusion_engine.generate_fused_response(
         query=payload.content,
