@@ -125,6 +125,7 @@ async def send_chat_message(
         "intent": fused.get("intent"),
         "latency_ms": total_latency_ms,
         "vqa_latency_ms": vqa_latency,
+        "confidence_threshold": conf_threshold,
     }
 
     # 5. Persist Assistant Response via Repository

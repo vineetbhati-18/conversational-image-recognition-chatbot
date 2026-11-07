@@ -17,7 +17,7 @@ const DEFAULT_WELCOME_MESSAGE = {
   id: 'msg-welcome',
   sender_type: 'assistant',
   content:
-    'Welcome to the Bharat Electronics Limited (BEL) Conversational Image Recognition System. Upload an aerial, tactical, or standard image to detect objects, inspect bounding boxes, and ask natural-language questions with multi-turn context retention.',
+    'Welcome to BEL Conversational Image Recognition. Upload an image to detect objects, inspect bounding boxes, and ask questions with multi-turn context retention.',
   created_at: new Date().toISOString(),
   metadata: { system: true },
 };
@@ -35,7 +35,6 @@ export function ChatProvider({ children }) {
 
   // Active Image State & Detection Telemetry
   const [activeImage, setActiveImage] = useState(null);
-  // shape: { id, url, backendUrl, name, size, width, height, file }
 
   // Detected Objects from YOLOv8
   const [detectedObjects, setDetectedObjects] = useState([]);
@@ -43,15 +42,28 @@ export function ChatProvider({ children }) {
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.40);
 
   // Messages / Chat Conversation History
-  const [messages, setMessages] = useState([DEFAULT_WELCOME_MESSAGE]);
+  const [messages, setMessages] = useState([]);
 
   // Loading & Processing States
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isSessionLoading, setIsSessionLoading] = useState(false);
+  const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState(null);
 
-  // Fetch full session details (messages, image, detections) from backend
+  // Persistent Confidence Threshold Setter
+  const updateConfidenceThreshold = useCallback((val) => {
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    setConfidenceThreshold(num);
+    if (activeSessionId) {
+      try {
+        localStorage.setItem(`bel_conf_${activeSessionId}`, num.toString());
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [activeSessionId]);
+
+  // Fetch full session details (messages, image, detections, confidence) from backend
   const loadSessionDetail = useCallback(async (sessionId) => {
     if (!sessionId) return null;
     setIsSessionLoading(true);
@@ -60,24 +72,8 @@ export function ChatProvider({ children }) {
     try {
       const detail = await fetchSessionDetail(sessionId);
       if (detail) {
-        // 1. Restore Conversation Messages
-        if (detail.messages && detail.messages.length > 0) {
-          setMessages(detail.messages);
-        } else {
-          setMessages([
-            {
-              id: `msg-welcome-${detail.id}`,
-              sender_type: 'assistant',
-              content: `Started conversation: "${detail.title || 'New Conversation'}". Upload an image to begin object detection and conversational analysis.`,
-              created_at: detail.created_at || new Date().toISOString(),
-              metadata: { system: true },
-            },
-          ]);
-        }
-
-        // 2. Restore Image and YOLO Detected Objects
+        // 1. Restore Active Image and YOLO Detected Objects
         if (detail.images && detail.images.length > 0) {
-          // Latest image is first (order_by created_at.desc())
           const latestImg = detail.images[0];
           setActiveImage({
             id: latestImg.id,
@@ -94,6 +90,52 @@ export function ChatProvider({ children }) {
           setDetectedObjects([]);
         }
 
+        // 2. Restore Confidence Threshold
+        let restoredThreshold = 0.40;
+        try {
+          const savedThresh = localStorage.getItem(`bel_conf_${detail.id}`);
+          if (savedThresh) {
+            restoredThreshold = parseFloat(savedThresh);
+          } else if (detail.messages && detail.messages.length > 0) {
+            const lastAssistantWithConf = [...detail.messages]
+              .reverse()
+              .find((m) => m.sender_type === 'assistant' && m.metadata?.confidence_threshold);
+            if (lastAssistantWithConf) {
+              restoredThreshold = lastAssistantWithConf.metadata.confidence_threshold;
+            }
+          }
+        } catch {
+          // ignore
+        }
+        setConfidenceThreshold(restoredThreshold);
+
+        // 3. Restore Conversation Messages
+        if (detail.messages && detail.messages.length > 0) {
+          setMessages(detail.messages);
+        } else if (detail.images && detail.images.length > 0) {
+          const img = detail.images[0];
+          const objCount = img.detected_objects?.length || 0;
+          setMessages([
+            {
+              id: `msg-ready-${detail.id}`,
+              sender_type: 'assistant',
+              content: `Image "${img.filename}" is loaded with ${objCount} detected object(s). Ready for questions or visual analysis.`,
+              created_at: detail.created_at || new Date().toISOString(),
+              metadata: { system: true, image_id: img.id },
+            },
+          ]);
+        } else {
+          setMessages([
+            {
+              id: `msg-welcome-${detail.id}`,
+              sender_type: 'assistant',
+              content: `Conversation ready. Upload an image to start visual object detection and analysis.`,
+              created_at: detail.created_at || new Date().toISOString(),
+              metadata: { system: true },
+            },
+          ]);
+        }
+
         setSelectedObjectId(null);
         setActiveSessionId(detail.id);
         try {
@@ -105,11 +147,7 @@ export function ChatProvider({ children }) {
       }
     } catch (err) {
       console.warn('Failed to load session detail:', err.message);
-      try {
-        localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
-      } catch {
-        // ignore storage errors
-      }
+      setErrorMessage(`Failed to load conversation: ${err.message}`);
     } finally {
       setIsSessionLoading(false);
     }
@@ -130,8 +168,12 @@ export function ChatProvider({ children }) {
           try {
             const savedSessionId = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
             const found = backendSessions.find((s) => s.id === savedSessionId);
-            targetSessionId = found ? found.id : backendSessions[0].id;
+            targetSessionId = found ? found.id : null;
           } catch {
+            targetSessionId = null;
+          }
+
+          if (!targetSessionId) {
             targetSessionId = backendSessions[0].id;
           }
 
@@ -154,6 +196,7 @@ export function ChatProvider({ children }) {
         }
       } catch (err) {
         console.warn('Backend session fetch note:', err.message);
+        setErrorMessage('Unable to connect to backend server. Retrying...');
       } finally {
         setIsSessionLoading(false);
       }
@@ -163,14 +206,15 @@ export function ChatProvider({ children }) {
   }, [loadSessionDetail]);
 
   // Switch Active Session
-  const switchSession = useCallback(async (sessionId) => {
-    if (!sessionId || sessionId === activeSessionId) return;
+  const switchSession = useCallback(async (sessionId, force = false) => {
+    if (!sessionId) return;
+    if (sessionId === activeSessionId && !force && messages.length > 1) return;
     await loadSessionDetail(sessionId);
-  }, [activeSessionId, loadSessionDetail]);
+  }, [activeSessionId, messages.length, loadSessionDetail]);
 
   // Create New Session
   const createNewSession = useCallback(async (customTitle) => {
-    const title = customTitle || `Recon Session #${sessions.length + 1}`;
+    const title = customTitle || `Recon #${sessions.length + 1}`;
     try {
       const newSession = await apiCreateSession(title);
       setSessions((prev) => [newSession, ...prev]);
@@ -187,7 +231,7 @@ export function ChatProvider({ children }) {
         {
           id: `msg-${Date.now()}`,
           sender_type: 'assistant',
-          content: `Started new conversation: "${newSession.title}". Please upload an image to begin object detection and conversational analysis.`,
+          content: 'New conversation started. Upload an image to begin analysis.',
           created_at: new Date().toISOString(),
           metadata: { system: true },
         },
@@ -235,7 +279,6 @@ export function ChatProvider({ children }) {
     setErrorMessage(null);
 
     try {
-      // 1. Revoke previous local object URL if existing to free memory
       if (activeImage?.url && activeImage.url.startsWith('blob:')) {
         URL.revokeObjectURL(activeImage.url);
       }
@@ -256,7 +299,7 @@ export function ChatProvider({ children }) {
         }
       }
 
-      // Create client-side preview
+      // Create client preview
       const localUrl = URL.createObjectURL(file);
       const img = new Image();
       img.src = localUrl;
@@ -275,7 +318,7 @@ export function ChatProvider({ children }) {
       };
       setActiveImage(newImagePayload);
 
-      // 2. Call backend upload endpoint
+      // Call backend upload endpoint
       const response = await apiUploadImage(file, targetSessionId);
       if (response) {
         if (response.id) newImagePayload.id = response.id;
@@ -284,40 +327,28 @@ export function ChatProvider({ children }) {
           newImagePayload.backendUrl = response.url;
         }
 
-        if (response.detected_objects && response.detected_objects.length > 0) {
-          setDetectedObjects(response.detected_objects);
-          const classesSummary = [
-            ...new Set(response.detected_objects.map((o) => o.class_name)),
-          ].join(', ');
+        const detectedCount = response.detected_objects ? response.detected_objects.length : 0;
+        setDetectedObjects(response.detected_objects || []);
 
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `msg-${Date.now()}`,
-              sender_type: 'system',
-              content: `Image "${file.name}" ingested. YOLOv8 detected ${response.detected_objects.length} object(s): [${classesSummary}]. Canvas updated with bounding boxes.`,
-              created_at: new Date().toISOString(),
-              metadata: { image_id: newImagePayload.id },
-            },
-          ]);
-        } else {
-          setDetectedObjects([]);
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `msg-${Date.now()}`,
-              sender_type: 'system',
-              content: `Image "${file.name}" ingested. No distinct objects identified above the current confidence threshold. You may lower the confidence slider or ask questions directly.`,
-              created_at: new Date().toISOString(),
-              metadata: { image_id: newImagePayload.id },
-            },
-          ]);
-        }
+        const classesSummary = detectedCount > 0
+          ? [...new Set(response.detected_objects.map((o) => o.class_name))].join(', ')
+          : 'None';
 
-        // Refresh session list to update titles and timestamps
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg-${Date.now()}`,
+            sender_type: 'system',
+            content: detectedCount > 0
+              ? `Image "${file.name}" uploaded. Detected ${detectedCount} object(s): [${classesSummary}].`
+              : `Image "${file.name}" uploaded. No distinct objects identified above confidence threshold.`,
+            created_at: new Date().toISOString(),
+            metadata: { image_id: newImagePayload.id },
+          },
+        ]);
+
         const updatedSessions = await fetchSessions().catch(() => null);
         if (updatedSessions) setSessions(updatedSessions);
-        return;
       }
     } catch (err) {
       setErrorMessage(`Image processing failed: ${err.message}`);
@@ -341,7 +372,6 @@ export function ChatProvider({ children }) {
     if (!text || !text.trim()) return;
     const trimmed = text.trim();
 
-    // Ensure session exists
     let targetSessionId = activeSessionId;
     if (!targetSessionId) {
       const created = await apiCreateSession(trimmed.slice(0, 30));
@@ -380,11 +410,10 @@ export function ChatProvider({ children }) {
         setMessages((prev) => [...prev, res]);
       }
 
-      // Update sessions list to reflect latest activity
       const updatedSessions = await fetchSessions().catch(() => null);
       if (updatedSessions) setSessions(updatedSessions);
     } catch (err) {
-      console.warn('Backend chat API error, using fallback:', err.message);
+      console.warn('Backend chat API error:', err.message);
       setMessages((prev) => [
         ...prev,
         {
@@ -419,7 +448,7 @@ export function ChatProvider({ children }) {
         selectedObjectId,
         setSelectedObjectId,
         confidenceThreshold,
-        setConfidenceThreshold,
+        setConfidenceThreshold: updateConfidenceThreshold,
         messages,
         sendMessage,
         handleImageUpload,
@@ -442,3 +471,4 @@ export function useChat() {
   }
   return context;
 }
+

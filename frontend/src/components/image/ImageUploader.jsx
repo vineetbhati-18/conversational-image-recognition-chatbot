@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, Image as ImageIcon, AlertCircle, Trash2, RefreshCw, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { UploadCloud, AlertCircle, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { useChat } from '../../context/ChatContext';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -13,26 +13,18 @@ export default function ImageUploader() {
 
   const validateAndProcessFile = (file) => {
     setValidationError(null);
-
     if (!file) return;
 
-    // 1. Validate MIME type
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      setValidationError(
-        `Invalid file type (${file.type || 'unknown'}). Supported formats are JPEG, PNG, and WebP.`
-      );
+      setValidationError(`Unsupported format (${file.type || 'unknown'}). Use JPEG, PNG, or WebP.`);
       return;
     }
 
-    // 2. Validate file size
     if (file.size > MAX_SIZE_BYTES) {
-      setValidationError(
-        `File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 15 MB.`
-      );
+      setValidationError(`File exceeds 15 MB (${(file.size / (1024 * 1024)).toFixed(1)} MB).`);
       return;
     }
 
-    // Process valid file
     handleImageUpload(file);
   };
 
@@ -64,21 +56,21 @@ export default function ImageUploader() {
     <div className="w-full">
       {/* Validation Error Banner */}
       {validationError && (
-        <div className="mb-4 p-3 rounded-xl bg-rose-950/70 border border-rose-800/80 text-rose-200 text-xs flex items-center justify-between animate-fade-in">
+        <div className="mb-2 p-2 rounded-lg bg-rose-950/60 border border-rose-800/60 text-rose-300 text-xs flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
             <span>{validationError}</span>
           </div>
           <button
             onClick={() => setValidationError(null)}
-            className="text-rose-400 hover:text-white text-xs underline ml-2"
+            className="text-rose-400 hover:text-white text-[11px] ml-2"
           >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* Hidden Native File Input */}
+      {/* Hidden File Input */}
       <input
         ref={fileInputRef}
         type="file"
@@ -87,55 +79,42 @@ export default function ImageUploader() {
         className="hidden"
       />
 
-      {/* When No Image is Loaded: Drag & Drop Ingestion Zone */}
+      {/* When No Image: Elegant Compact Dropzone */}
       {!activeImage && (
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-200 p-8 sm:p-12 text-center flex flex-col items-center justify-center ${
+          className={`cursor-pointer rounded-xl border border-dashed transition-all p-4 text-center flex items-center justify-center space-x-3.5 ${
             isDragOver
-              ? 'border-blue-500 bg-blue-950/30 scale-[1.01]'
+              ? 'border-blue-500 bg-blue-950/20'
               : 'border-slate-800 hover:border-slate-700 bg-slate-900/40 hover:bg-slate-900/70'
           }`}
         >
-          {/* Central Upload Icon */}
-          <div className="w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-4 shadow-inner">
+          <div className="w-9 h-9 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
             {isUploading ? (
-              <RefreshCw className="w-7 h-7 animate-spin text-blue-400" />
+              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
             ) : (
-              <UploadCloud className="w-7 h-7" />
+              <UploadCloud className="w-4 h-4" />
             )}
           </div>
-
-          <h4 className="text-sm font-semibold text-white">
-            {isUploading ? 'Ingesting and validating image...' : 'Upload Tactical or Reconnaissance Image'}
-          </h4>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm">
-            Drag and drop your image file here, or click to browse from local workstation.
-          </p>
-
-          <div className="flex items-center space-x-3 mt-4 text-[11px] text-slate-500">
-            <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/60">
-              JPEG, PNG, WebP
-            </span>
-            <span>•</span>
-            <span>Up to 15 MB</span>
-            <span>•</span>
-            <span className="text-emerald-400 flex items-center space-x-1">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>100% Local</span>
-            </span>
+          <div className="text-left min-w-0">
+            <p className="text-xs font-medium text-slate-200">
+              {isUploading ? 'Uploading and analyzing...' : 'Upload Image'}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Drop file here or click to browse (JPEG, PNG, WebP up to 15MB)
+            </p>
           </div>
         </div>
       )}
 
-      {/* When Image is Loaded: Compact Action Bar */}
+      {/* When Image Loaded: Compact Info Bar */}
       {activeImage && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800 mb-4">
-          <div className="flex items-center space-x-3 min-w-0">
-            <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-700 shrink-0 bg-slate-950">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-md overflow-hidden border border-slate-800 shrink-0 bg-slate-950">
               <img
                 src={activeImage.url}
                 alt={activeImage.name}
@@ -143,31 +122,33 @@ export default function ImageUploader() {
               />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-semibold text-white truncate max-w-[200px] sm:max-w-xs">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-xs font-medium text-slate-200 truncate max-w-[180px] sm:max-w-xs">
                   {activeImage.name}
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800 text-[10px] font-mono">
+                <span className="text-[10px] text-slate-500 font-mono">
                   {activeImage.width}×{activeImage.height}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">{activeImage.size}</p>
+              <span className="text-[10px] text-slate-500">{activeImage.size}</span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 shrink-0">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center space-x-1.5 transition-colors"
+              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center space-x-1 transition-colors"
+              title="Replace image"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3 h-3" />
               <span>Replace</span>
             </button>
             <button
               onClick={removeImage}
-              className="px-3 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs font-medium border border-rose-800/60 flex items-center space-x-1.5 transition-colors"
+              className="px-2 py-1 rounded bg-slate-800 hover:bg-rose-950/70 text-slate-400 hover:text-rose-300 text-[11px] flex items-center space-x-1 transition-colors"
+              title="Remove image"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3 h-3" />
               <span>Remove</span>
             </button>
           </div>

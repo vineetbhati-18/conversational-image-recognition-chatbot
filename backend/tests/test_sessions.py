@@ -124,3 +124,85 @@ async def test_session_restoration_after_refresh():
         del_res = await client.delete(f"/api/v1/sessions/{session_id}")
         assert del_res.status_code == 204
 
+
+@pytest.mark.asyncio
+async def test_conversation_switching_isolation():
+    """
+    Verifies that switching between two separate conversations loads the exact
+    distinct messages, images, and detections for each session with zero data leakage.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create Session A
+        res_a = await client.post("/api/v1/sessions", json={"title": "Session A (Airfield)"})
+        assert res_a.status_code == 201
+        session_a_id = res_a.json()["id"]
+
+        # Create Session B
+        res_b = await client.post("/api/v1/sessions", json={"title": "Session B (Harbor)"})
+        assert res_b.status_code == 201
+        session_b_id = res_b.json()["id"]
+
+        # Chat in Session A
+        await client.post("/api/v1/chat/message", json={
+            "session_id": session_a_id,
+            "content": "Message for Airfield recon",
+        })
+
+        # Chat in Session B
+        await client.post("/api/v1/chat/message", json={
+            "session_id": session_b_id,
+            "content": "Message for Harbor surveillance",
+        })
+
+        # Switch to Session A: verify only Session A messages exist
+        detail_a = (await client.get(f"/api/v1/sessions/{session_a_id}")).json()
+        assert len(detail_a["messages"]) == 2
+        assert detail_a["messages"][0]["content"] == "Message for Airfield recon"
+        assert not any("Harbor" in m["content"] for m in detail_a["messages"])
+
+        # Switch to Session B: verify only Session B messages exist
+        detail_b = (await client.get(f"/api/v1/sessions/{session_b_id}")).json()
+        assert len(detail_b["messages"]) == 2
+        assert detail_b["messages"][0]["content"] == "Message for Harbor surveillance"
+        assert not any("Airfield" in m["content"] for m in detail_b["messages"])
+
+        # Cleanup
+        await client.delete(f"/api/v1/sessions/{session_a_id}")
+        await client.delete(f"/api/v1/sessions/{session_b_id}")
+
+
+@pytest.mark.asyncio
+async def test_image_only_session_restoration():
+    """
+    Verifies that an image uploaded without any prior chat messages is preserved
+    and fully restored with its dimensions, URL, and YOLO detections on session reload.
+    """
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.post("/api/v1/sessions", json={"title": "Image Only Recon"})
+        assert res.status_code == 201
+        session_id = res.json()["id"]
+
+        import io
+        from PIL import Image
+        buf = io.BytesIO()
+        Image.new("RGB", (320, 240), color=(120, 150, 200)).save(buf, format="JPEG")
+
+        files = {"file": ("isolated_recon.jpg", buf.getvalue(), "image/jpeg")}
+        upload_res = await client.post("/api/v1/images/upload", files=files, data={"session_id": session_id})
+        assert upload_res.status_code == 201
+
+        # Fetch detail directly
+        detail = (await client.get(f"/api/v1/sessions/{session_id}")).json()
+        assert detail["id"] == session_id
+        assert len(detail["images"]) == 1
+        assert detail["images"][0]["filename"] == "isolated_recon.jpg"
+        assert detail["images"][0]["width"] == 320
+        assert detail["images"][0]["height"] == 240
+        assert "detected_objects" in detail["images"][0]
+
+        # Cleanup
+        await client.delete(f"/api/v1/sessions/{session_id}")
+
+

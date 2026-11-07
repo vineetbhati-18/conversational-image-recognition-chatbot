@@ -87,7 +87,7 @@ function MainAppContent() {
         activeTab={activeTab}
         sidebar={<SessionSidebar onClose={() => setIsSidebarOpen(false)} />}
         visionPanel={
-          <div className="flex-1 flex flex-col space-y-4">
+          <div className="flex-1 flex flex-col space-y-3">
             <ImageUploader />
             {activeImage ? (
               <>
@@ -96,8 +96,8 @@ function MainAppContent() {
                 <ObjectDetectionList />
               </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-2xl p-6 text-center text-slate-500">
-                <p className="text-xs">No image loaded. Upload an image above to activate the deep-learning vision canvas.</p>
+              <div className="flex-1 flex flex-col items-center justify-center border border-slate-800/40 rounded-xl p-6 text-center text-slate-500">
+                <p className="text-xs">Upload an image to view detection canvas and objects.</p>
               </div>
             )}
           </div>

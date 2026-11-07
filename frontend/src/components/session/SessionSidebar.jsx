@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useChat } from '../../context/ChatContext';
 import SessionItem from './SessionItem';
-import { Plus, Search, Layers, Database, Shield, X } from 'lucide-react';
+import { Plus, Search, MessageSquare, Database, X, Loader2 } from 'lucide-react';
 
 export default function SessionSidebar({ onClose }) {
   const { sessions, activeSessionId, switchSession, createNewSession, deleteSession, isSessionLoading } = useChat();
@@ -12,58 +12,53 @@ export default function SessionSidebar({ onClose }) {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-900/90 dark:bg-slate-950/90 text-slate-100 select-none">
+    <div className="flex-1 flex flex-col h-full bg-slate-950/80 text-slate-200 select-none border-r border-slate-800/60">
       {/* Top Header & Actions */}
-      <div className="p-4 border-b border-slate-800 space-y-3">
+      <div className="p-3 border-b border-slate-800/60 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Layers className="w-4 h-4 text-blue-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Conversations
-            </h3>
-          </div>
+          <span className="text-xs font-semibold text-slate-300">Conversations</span>
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-white lg:hidden"
+              className="p-1 rounded text-slate-400 hover:text-white lg:hidden"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {/* New Conversation Button */}
+        {/* New Chat Button */}
         <button
           onClick={() => createNewSession()}
-          className="w-full py-2.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center justify-center space-x-2 transition-all shadow-md shadow-blue-900/20 active:scale-[0.99]"
+          className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center justify-center space-x-1.5 transition-colors shadow-sm"
         >
-          <Plus className="w-4 h-4" />
-          <span>New Conversation</span>
+          <Plus className="w-3.5 h-3.5" />
+          <span>New Chat</span>
         </button>
 
-        {/* Search Bar */}
+        {/* Search Input */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3 h-3 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search conversations..."
-            className="w-full bg-slate-800/80 border border-slate-700/60 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            placeholder="Search..."
+            className="w-full bg-slate-900/80 border border-slate-800 rounded-lg pl-7 pr-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/80"
           />
         </div>
       </div>
 
       {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {isSessionLoading && sessions.length === 0 ? (
-          <div className="flex items-center justify-center py-10 space-x-2 text-xs text-slate-400">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span>Loading conversations...</span>
+          <div className="flex items-center justify-center py-8 space-x-2 text-xs text-slate-400">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+            <span>Loading...</span>
           </div>
         ) : filteredSessions.length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-500">
-            {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+            {searchQuery ? 'No matching chats' : 'No conversations'}
           </div>
         ) : (
           filteredSessions.map((s) => (
@@ -81,19 +76,13 @@ export default function SessionSidebar({ onClose }) {
         )}
       </div>
 
-      {/* Sidebar Footer with PostgreSQL & Security Telemetry */}
-      <div className="p-3 border-t border-slate-800/80 bg-slate-950/60 text-[11px] text-slate-500 space-y-1.5">
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="flex items-center space-x-1">
-            <Database className="w-3 h-3 text-amber-400" />
-            <span>PostgreSQL 18</span>
-          </span>
-          <span className="font-mono text-slate-400">{sessions.length} Threads</span>
-        </div>
-        <div className="flex items-center space-x-1 text-[10px] text-slate-500">
-          <Shield className="w-3 h-3 text-emerald-400" />
-          <span>Multi-turn contextual persistence</span>
-        </div>
+      {/* Sidebar Footer */}
+      <div className="p-2.5 border-t border-slate-800/60 bg-slate-950/40 text-[10px] text-slate-500 flex items-center justify-between">
+        <span className="flex items-center space-x-1">
+          <Database className="w-2.5 h-2.5 text-amber-400" />
+          <span>PostgreSQL</span>
+        </span>
+        <span>{sessions.length} sessions</span>
       </div>
     </div>
   );
