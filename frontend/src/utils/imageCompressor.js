@@ -10,13 +10,13 @@
  * - Prevents cloud memory exhaustion on Render Free 512MB RAM containers
  */
 
-export async function compressImageForUpload(file, maxDimension = 800, quality = 0.80) {
+export async function compressImageForUpload(file, maxDimension = 1920, quality = 0.85) {
   if (!file || !file.type.startsWith('image/')) {
     return file;
   }
 
-  // If already under 150KB, skip client resizing
-  if (file.size <= 150 * 1024) {
+  // If already under 1MB, skip client resizing to preserve native quality
+  if (file.size <= 1024 * 1024) {
     return file;
   }
 

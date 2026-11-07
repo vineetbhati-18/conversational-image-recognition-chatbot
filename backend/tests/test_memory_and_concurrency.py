@@ -42,15 +42,15 @@ async def test_image_preprocessing_downscaling():
     Verifies that oversized images are automatically downscaled to protect 512MB RAM.
     """
     import io
-    # Create large 1600x1200 dummy image
-    img = Image.new("RGB", (1600, 1200), color=(128, 128, 128))
+    # Create large 2500x2000 dummy image
+    img = Image.new("RGB", (2500, 2000), color=(128, 128, 128))
     buf = io.BytesIO()
     img.save(buf, format="JPEG")
     file_bytes = buf.getvalue()
 
     meta = await validate_and_save_image(file_bytes, "oversized_test.jpg")
-    assert meta["width"] <= 800
-    assert meta["height"] <= 800
+    assert meta["width"] <= 1920
+    assert meta["height"] <= 1920
     assert Path(meta["storage_path"]).exists()
     # Cleanup
     try:

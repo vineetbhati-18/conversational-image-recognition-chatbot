@@ -42,7 +42,7 @@ async def validate_and_save_image(
     """
     Validates file size, magic bytes signature, and Pillow readability,
     then saves to local storage with a secure UUID.
-    Applies in-place streaming downscale to max 800px to protect 512MB RAM environments.
+    Applies in-place downscale only if image exceeds 1920px (Full HD) to protect RAM.
     """
     # 1. Size Validation
     file_size = len(file_bytes)
@@ -86,9 +86,9 @@ async def validate_and_save_image(
             orig_w, orig_h = pil_img.size
             format_name = pil_img.format or ("JPEG" if detected_mime == "image/jpeg" else "PNG")
 
-            # In-place downscale if image exceeds 800px on any dimension
-            if orig_w > 800 or orig_h > 800:
-                pil_img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+            # In-place downscale only if image exceeds 1920px on any dimension (Full HD preservation)
+            if orig_w > 1920 or orig_h > 1920:
+                pil_img.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
 
             # Ensure RGB color mode for JPEG persistence
             save_fmt = "JPEG" if detected_mime == "image/jpeg" or format_name.upper() in ("JPEG", "JPG") else ("PNG" if detected_mime == "image/png" else "WEBP")
