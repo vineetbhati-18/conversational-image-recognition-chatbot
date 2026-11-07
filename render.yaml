@@ -1,0 +1,32 @@
+# Render Infrastructure Blueprint for BEL Conversational Image Recognition Chatbot
+services:
+  - type: web
+    name: bel-chatbot-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    region: oregon
+    plan: starter
+    healthCheckPath: /api/v1/health
+    disk:
+      name: uploads
+      mountPath: /app/uploads
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bel-postgres
+          property: connectionString
+      - key: CORS_ORIGINS
+        value: "https://*.vercel.app,http://localhost:5173,http://localhost:3000,*"
+      - key: UPLOAD_DIR
+        value: /app/uploads
+      - key: DEVICE_OVERRIDE
+        value: cpu
+
+databases:
+  - name: bel-postgres
+    databaseName: bel_chatbot_db
+    user: bel_admin
+    region: oregon
+    plan: free

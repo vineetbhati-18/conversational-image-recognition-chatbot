@@ -7,6 +7,7 @@ import {
   uploadImage as apiUploadImage,
   sendChatMessage as apiSendChatMessage,
   detectObjects as apiDetectObjects,
+  resolveMediaUrl,
 } from '../services/api';
 
 const ChatContext = createContext();
@@ -75,10 +76,11 @@ export function ChatProvider({ children }) {
         // 1. Restore Active Image and YOLO Detected Objects
         if (detail.images && detail.images.length > 0) {
           const latestImg = detail.images[0];
+          const resolvedMediaUrl = resolveMediaUrl(latestImg.url);
           setActiveImage({
             id: latestImg.id,
-            url: latestImg.url,
-            backendUrl: latestImg.url,
+            url: resolvedMediaUrl,
+            backendUrl: resolvedMediaUrl,
             name: latestImg.filename,
             size: `${(latestImg.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`,
             width: latestImg.width,
@@ -323,8 +325,9 @@ export function ChatProvider({ children }) {
       if (response) {
         if (response.id) newImagePayload.id = response.id;
         if (response.url) {
-          newImagePayload.url = response.url;
-          newImagePayload.backendUrl = response.url;
+          const resolvedUploadedUrl = resolveMediaUrl(response.url);
+          newImagePayload.url = resolvedUploadedUrl;
+          newImagePayload.backendUrl = resolvedUploadedUrl;
         }
 
         const detectedCount = response.detected_objects ? response.detected_objects.length : 0;

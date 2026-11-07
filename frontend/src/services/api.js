@@ -4,6 +4,27 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
+/**
+ * Resolves static media paths to absolute URLs in production cloud environments.
+ */
+export function resolveMediaUrl(path) {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:')) {
+    return path;
+  }
+  const backendBase =
+    import.meta.env.VITE_BACKEND_URL ||
+    (import.meta.env.VITE_API_BASE_URL
+      ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/v1\/?$/, '')
+      : '');
+  if (!backendBase) {
+    return path;
+  }
+  const cleanBase = backendBase.endsWith('/') ? backendBase.slice(0, -1) : backendBase;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${cleanBase}${cleanPath}`;
+}
+
 export async function fetchHealth() {
   const response = await fetch(`${API_BASE_URL}/health`);
   if (!response.ok) {

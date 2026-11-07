@@ -15,6 +15,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Pre-cache model weights during image build for zero cold-start delay
+COPY scripts/preload_models.py ./scripts/
+RUN python scripts/preload_models.py
+
 # Copy application source code and migrations
 COPY . /app/
 
@@ -22,15 +26,16 @@ COPY . /app/
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    DEVICE=cpu
+    DEVICE_OVERRIDE=cpu \
+    PORT=8000
 
-# Create uploads directory
+# Create uploads directory for persistent storage mount
 RUN mkdir -p /app/uploads
 
 EXPOSE 8000
 
 # Healthcheck against FastAPI health endpoint
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
