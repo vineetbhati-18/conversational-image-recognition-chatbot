@@ -5,7 +5,7 @@ import { useChat } from '../../context/ChatContext';
 import { MessageSquare, Shield } from 'lucide-react';
 
 export default function ChatContainer() {
-  const { messages, sendMessage, isLoading, isSessionLoading, activeImage } = useChat();
+  const { messages, sendMessage, isLoading, isSessionLoading, isUploading, activeImage } = useChat();
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-950/60 select-none">
@@ -38,7 +38,7 @@ export default function ChatContainer() {
       <MessageInput
         onSendMessage={sendMessage}
         isLoading={isLoading}
-        disabled={isSessionLoading}
+        disabled={isSessionLoading || isUploading}
       />
     </div>
   );

@@ -64,8 +64,18 @@ async def send_chat_message(
     vqa_latency = 0.0
     conf_threshold = payload.confidence_threshold if payload.confidence_threshold is not None else 0.40
 
-    if payload.image_id:
-        image = await ImageRepository.get_by_id(db, payload.image_id, load_objects=True)
+    # Resolve target image: use explicit image_id, or fallback to session's latest image
+    target_image_id = payload.image_id
+    if not target_image_id and session:
+        # Eagerly load images if not already loaded
+        images = getattr(session, "images", None)
+        if images:
+            # Pick the most recently created image in this session
+            sorted_imgs = sorted(images, key=lambda img: img.created_at, reverse=True)
+            target_image_id = sorted_imgs[0].id
+
+    if target_image_id:
+        image = await ImageRepository.get_by_id(db, target_image_id, load_objects=True)
         if image:
             img_w = image.width or 640
             img_h = image.height or 480

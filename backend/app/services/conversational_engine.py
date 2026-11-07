@@ -502,12 +502,26 @@ class MultiModalFusionEngine:
                     response = f"Visual analysis indicates that the {target_class} is {clean_vqa}."
                 else:
                     response = f"Visual analysis indicates: {clean_vqa.capitalize()}."
+            elif target_class:
+                # Provide instant grounding from real YOLO telemetry when external VQA is unreachable
+                classes_to_match = set(matched_classes or [target_class])
+                matching = [d for d in yolo_detections if d.get("class_name") in classes_to_match]
+                if matching:
+                    m = matching[0]
+                    conf = int(round(m.get("confidence", 0.5) * 100))
+                    sector = m.get("spatial_sector", "center")
+                    response = (
+                        f"The {target_class} is identified in the {sector} area of the image ({conf}% confidence). "
+                        f"Detailed color/texture analysis requires an active external vision key (GEMINI_API_KEY), but the {target_class} has been confirmed and localized by YOLO."
+                    )
+                else:
+                    response = f"I did not detect any {target_class}s in the image to inspect."
             elif vqa_error:
                 response = f"Visual question answering is currently unavailable: {vqa_error}"
             else:
                 response = (
-                    "Visual question answering is currently unavailable because the external inference service "
-                    "(HF_TOKEN) is unconfigured or unreachable. You can continue asking questions about detected "
+                    "Visual question answering is currently unavailable because external inference "
+                    "is unconfigured or unreachable. You can continue asking questions about detected "
                     "objects, categories, counts, and spatial positions."
                 )
 

@@ -104,17 +104,25 @@ export async function deleteSession(sessionId) {
   }
 }
 
-export async function uploadImage(file, sessionId) {
+export async function uploadImage(file, sessionId, retryCount = 1) {
   const formData = new FormData();
   formData.append('file', file);
   if (sessionId) {
     formData.append('session_id', sessionId);
   }
 
-  return safeApiFetch(`${API_BASE_URL}/images/upload`, {
-    method: 'POST',
-    body: formData,
-  });
+  try {
+    return await safeApiFetch(`${API_BASE_URL}/images/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+  } catch (err) {
+    if (retryCount > 0 && (err.message.includes('waking up') || err.message.includes('Backend connection'))) {
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return uploadImage(file, sessionId, retryCount - 1);
+    }
+    throw err;
+  }
 }
 
 export async function detectObjects(imageId, confidenceThreshold = 0.35) {

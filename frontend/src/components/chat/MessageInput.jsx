@@ -66,8 +66,10 @@ export default function MessageInput({ onSendMessage, isLoading, disabled }) {
           onKeyDown={handleKeyDown}
           disabled={disabled || isLoading}
           placeholder={
-            disabled
-              ? 'Loading conversation...'
+            isLoading
+              ? 'Analyzing visual telemetry...'
+              : disabled
+              ? 'Processing image / loading...'
               : 'Ask a question about the image...'
           }
           rows={1}

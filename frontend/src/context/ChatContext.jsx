@@ -76,7 +76,10 @@ export function ChatProvider({ children }) {
       if (detail) {
         // 1. Restore Active Image and YOLO Detected Objects
         if (detail.images && detail.images.length > 0) {
-          const latestImg = detail.images[0];
+          const sortedImages = [...detail.images].sort(
+            (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+          );
+          const latestImg = sortedImages[0];
           const resolvedMediaUrl = resolveMediaUrl(latestImg.url);
           setActiveImage({
             id: latestImg.id,
@@ -409,10 +412,13 @@ export function ChatProvider({ children }) {
     setErrorMessage(null);
 
     try {
+      const validImageId =
+        activeImage?.id && !activeImage.id.startsWith('img-') ? activeImage.id : null;
+
       const res = await apiSendChatMessage(
         targetSessionId,
         trimmed,
-        activeImage?.id || null,
+        validImageId,
         confidenceThreshold
       );
 
