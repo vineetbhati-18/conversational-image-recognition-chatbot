@@ -1,22 +1,21 @@
 import os
 
-# Enforce strict single-threading for all numerical and computer vision libraries
-# Essential for containerized environments (Render 512MB RAM) on multi-core host nodes
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
-os.environ["NUMEXPR_NUM_THREADS"] = "1"
+# Balanced threading for CPU inference in containerized environments (Render Free)
+os.environ["OMP_NUM_THREADS"] = "2"
+os.environ["OPENBLAS_NUM_THREADS"] = "2"
+os.environ["MKL_NUM_THREADS"] = "2"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "2"
+os.environ["NUMEXPR_NUM_THREADS"] = "2"
 
 try:
     import cv2
-    cv2.setNumThreads(1)
+    cv2.setNumThreads(2)
 except Exception:
     pass
 
 try:
     import torch
-    torch.set_num_threads(1)
+    torch.set_num_threads(2)
     torch.set_num_interop_threads(1)
 except Exception:
     pass
