@@ -20,6 +20,14 @@ export async function fetchSessions() {
   return response.json();
 }
 
+export async function fetchSessionDetail(sessionId) {
+  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch session detail: ${response.status}`);
+  }
+  return response.json();
+}
+
 export async function createSession(title = 'New Conversation') {
   const response = await fetch(`${API_BASE_URL}/sessions`, {
     method: 'POST',
@@ -30,6 +38,16 @@ export async function createSession(title = 'New Conversation') {
     throw new Error(`Failed to create session: ${response.status}`);
   }
   return response.json();
+}
+
+export async function deleteSession(sessionId) {
+  const response = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Failed to delete session: ${response.status}`);
+  }
+  return true;
 }
 
 export async function uploadImage(file, sessionId) {

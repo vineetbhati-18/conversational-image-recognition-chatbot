@@ -4,7 +4,7 @@ import SessionItem from './SessionItem';
 import { Plus, Search, Layers, Database, Shield, X } from 'lucide-react';
 
 export default function SessionSidebar({ onClose }) {
-  const { sessions, activeSessionId, switchSession, createNewSession, deleteSession } = useChat();
+  const { sessions, activeSessionId, switchSession, createNewSession, deleteSession, isSessionLoading } = useChat();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredSessions = sessions.filter((s) =>
@@ -56,7 +56,12 @@ export default function SessionSidebar({ onClose }) {
 
       {/* Sessions List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-        {filteredSessions.length === 0 ? (
+        {isSessionLoading && sessions.length === 0 ? (
+          <div className="flex items-center justify-center py-10 space-x-2 text-xs text-slate-400">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span>Loading conversations...</span>
+          </div>
+        ) : filteredSessions.length === 0 ? (
           <div className="text-center py-8 text-xs text-slate-500">
             {searchQuery ? 'No matching conversations' : 'No conversations yet'}
           </div>
