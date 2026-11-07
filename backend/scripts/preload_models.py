@@ -11,10 +11,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("preload_models")
 
 def preload_yolo():
-    logger.info("Pre-caching YOLOv8s weights (yolov8s.pt)...")
+    logger.info("Pre-caching YOLO weights (yolov8n.pt and yolov8s.pt)...")
     from ultralytics import YOLO
-    model = YOLO("yolov8s.pt")
-    logger.info("YOLOv8s successfully loaded and cached.")
+    YOLO("yolov8n.pt")
+    YOLO("yolov8s.pt")
+    logger.info("YOLO models successfully loaded and cached.")
 
 def preload_blip():
     logger.info("Pre-caching Salesforce/blip-vqa-base weights...")

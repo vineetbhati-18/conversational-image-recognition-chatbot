@@ -30,6 +30,13 @@ class YOLOService:
 
         logger.info(f"Loading YOLOv8 weights ({self.model_name}) on device: {self.device.upper()}...")
         try:
+            # Enforce single-thread execution for PyTorch on CPU to prevent container OOM spikes
+            try:
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+
             self.model = YOLO(self.model_name)
             # Verify device compatibility
             if self.device == "mps" and not torch.backends.mps.is_available():
@@ -73,15 +80,18 @@ class YOLOService:
         """
         self.load_model()
         import time
+        import gc
         from uuid import uuid4
 
         start_time = time.perf_counter()
-        results = self.model.predict(
-            source=image_source,
-            conf=conf_threshold,
-            device=self.device,
-            verbose=False,
-        )
+        with torch.inference_mode():
+            results = self.model.predict(
+                source=image_source,
+                conf=conf_threshold,
+                imgsz=480,
+                device=self.device,
+                verbose=False,
+            )
         latency_ms = (time.perf_counter() - start_time) * 1000
 
         detections = []
@@ -133,6 +143,7 @@ class YOLOService:
         logger.info(
             f"YOLO detected {len(detections)} objects on {self.device.upper()} in {latency_ms:.2f}ms"
         )
+        gc.collect()
 
         return {
             "detections": detections,

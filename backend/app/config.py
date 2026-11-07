@@ -81,8 +81,9 @@ class Settings(BaseSettings):
 
     # AI / ML Inference Configuration
     DEVICE_OVERRIDE: str = ""
-    YOLO_MODEL_NAME: str = "yolov8s.pt"
+    YOLO_MODEL_NAME: str = "yolov8n.pt"
     VQA_MODEL_NAME: str = "Salesforce/blip-vqa-base"
+    HF_TOKEN: Optional[str] = Field(default=None, validation_alias="HF_TOKEN")
     CONFIDENCE_THRESHOLD: float = 0.35
     MAX_UPLOAD_SIZE_MB: int = 15
 
