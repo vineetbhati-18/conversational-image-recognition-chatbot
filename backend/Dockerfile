@@ -13,6 +13,7 @@ WORKDIR /app
 # Copy dependency definition and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Pre-cache model weights during image build for zero cold-start delay

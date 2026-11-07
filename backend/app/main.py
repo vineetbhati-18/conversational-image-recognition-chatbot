@@ -62,14 +62,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database schema initialization warning: {e}")
 
-    # 3. Pre-load YOLO weights at startup
-    try:
-        from app.services.yolo_service import get_yolo_service
-        yolo = get_yolo_service()
-        yolo.load_model()
-        logger.info("Successfully loaded YOLO model weights.")
-    except Exception as e:
-        logger.warning(f"YOLO pre-load warning: {e}")
+    # 3. Model initialization: On Render Free (512MB RAM), defer YOLO load to first on-demand inference
+    logger.info("YOLOv8 model configured for on-demand lazy initialization.")
 
     yield
 
