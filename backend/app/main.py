@@ -60,19 +60,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database schema initialization warning: {e}")
 
-    # 3. Warm up YOLO object detection model at startup
+    # 3. Pre-load YOLO weights at startup
     try:
-        import numpy as np
         from app.services.yolo_service import get_yolo_service
         yolo = get_yolo_service()
         yolo.load_model()
-        if yolo.model is not None:
-            dummy = np.zeros((64, 64, 3), dtype=np.uint8)
-            with torch.inference_mode():
-                yolo.model.predict(dummy, imgsz=64, verbose=False)
-        logger.info("Successfully pre-warmed YOLO model and inference pipeline.")
+        logger.info("Successfully loaded YOLO model weights.")
     except Exception as e:
-        logger.warning(f"YOLO pre-warm warning: {e}")
+        logger.warning(f"YOLO pre-load warning: {e}")
 
     yield
 
