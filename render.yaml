@@ -1,4 +1,5 @@
-# Render Infrastructure Blueprint for BEL Conversational Image Recognition Chatbot
+# Render Infrastructure Blueprint - 100% Free Tier Configuration
+# BEL Conversational Image Recognition Chatbot
 services:
   - type: web
     name: bel-chatbot-api
@@ -6,12 +7,8 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     region: oregon
-    plan: starter
+    plan: free
     healthCheckPath: /api/v1/health
-    disk:
-      name: uploads
-      mountPath: /app/uploads
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -25,6 +22,8 @@ services:
         value: cpu
 
 databases:
+  # Render Free PostgreSQL: 1 GB storage, 256 MB RAM.
+  # NOTE: Render Free PostgreSQL automatically expires after 30 days.
   - name: bel-postgres
     databaseName: bel_chatbot_db
     user: bel_admin
