@@ -73,6 +73,55 @@ class YOLOService:
             return "center"
         return f"{vert}-{horiz}"
 
+    @staticmethod
+    def suppress_duplicate_nested_boxes(detections: list, iou_thresh: float = 0.45, containment_thresh: float = 0.70) -> list:
+        """
+        Suppresses redundant duplicate bounding boxes and nested sub-parts of the same object class
+        (e.g., duplicate truck cab/trailer boxes on the same vehicle).
+        """
+        if len(detections) <= 1:
+            return detections
+
+        sorted_dets = sorted(detections, key=lambda d: d.get("confidence", 0), reverse=True)
+        kept = []
+        for d in sorted_dets:
+            b = d.get("bbox", {})
+            w = max(0.0, b.get("x_max", 0) - b.get("x_min", 0))
+            h = max(0.0, b.get("y_max", 0) - b.get("y_min", 0))
+            area = w * h
+            if area <= 0:
+                continue
+
+            duplicate = False
+            for k in kept:
+                if k.get("class_name") != d.get("class_name"):
+                    continue
+                kb = k.get("bbox", {})
+                kw = max(0.0, kb.get("x_max", 0) - kb.get("x_min", 0))
+                kh = max(0.0, kb.get("y_max", 0) - kb.get("y_min", 0))
+                karea = kw * kh
+                if karea <= 0:
+                    continue
+
+                inter_w = max(0.0, min(b.get("x_max", 0), kb.get("x_max", 0)) - max(b.get("x_min", 0), kb.get("x_min", 0)))
+                inter_h = max(0.0, min(b.get("y_max", 0), kb.get("y_max", 0)) - max(b.get("y_min", 0), kb.get("y_min", 0)))
+                inter_area = inter_w * inter_h
+
+                if inter_area <= 0:
+                    continue
+
+                iou = inter_area / (area + karea - inter_area)
+                containment = inter_area / min(area, karea)
+
+                if iou >= iou_thresh or containment >= containment_thresh:
+                    duplicate = True
+                    break
+
+            if not duplicate:
+                kept.append(d)
+
+        return kept
+
     def detect_objects(
         self,
         image_source,
@@ -96,6 +145,7 @@ class YOLOService:
             results = self.model.predict(
                 source=image_source,
                 conf=conf_threshold,
+                iou=0.45,
                 imgsz=640,
                 device=self.device,
                 verbose=False,
@@ -163,6 +213,8 @@ class YOLOService:
                         "y_max": round(norm_y_max, 4),
                     },
                 })
+
+        detections = self.suppress_duplicate_nested_boxes(detections)
 
         logger.info(
             f"YOLO detected {len(detections)} objects on {self.device.upper()} in {latency_ms:.2f}ms"
