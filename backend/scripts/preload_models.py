@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Model Weight Preloading & Verification Script for Production Deployment.
-Pre-caches YOLOv8 and BLIP VQA model weights during build/Docker image compilation.
+Pre-caches YOLOv8n model weights during build/Docker image compilation.
 """
 import sys
 import logging
@@ -11,25 +11,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("preload_models")
 
 def preload_yolo():
-    logger.info("Pre-caching YOLO weights (yolov8n.pt and yolov8s.pt)...")
+    logger.info("Pre-caching YOLOv8n weights (yolov8n.pt)...")
     from ultralytics import YOLO
     YOLO("yolov8n.pt")
-    YOLO("yolov8s.pt")
-    logger.info("YOLO models successfully loaded and cached.")
-
-def preload_blip():
-    logger.info("Pre-caching Salesforce/blip-vqa-base weights...")
-    from transformers import BlipProcessor, BlipForQuestionAnswering
-    model_name = "Salesforce/blip-vqa-base"
-    BlipProcessor.from_pretrained(model_name)
-    BlipForQuestionAnswering.from_pretrained(model_name)
-    logger.info("BLIP VQA Base successfully loaded and cached.")
+    logger.info("YOLOv8n model successfully loaded and cached.")
 
 if __name__ == "__main__":
     try:
         preload_yolo()
-        preload_blip()
-        logger.info("All production model weights preloaded successfully.")
+        logger.info("Production YOLOv8n model weights preloaded successfully.")
     except Exception as e:
         logger.error(f"Failed to preload model weights: {e}")
         sys.exit(1)

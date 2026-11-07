@@ -52,11 +52,9 @@ async def upload_image_endpoint(
         height=image_meta["height"],
     )
 
-    # 4. Run real YOLOv8 detection pass offloaded to worker thread to prevent blocking event loop
-    import asyncio
+    # 4. Run real YOLOv8 detection pass with concurrency control to prevent RAM spikes
     yolo = get_yolo_service()
-    detection_results = await asyncio.to_thread(
-        yolo.detect_objects,
+    detection_results = await yolo.detect_objects_async(
         image_source=image_meta["storage_path"],
         conf_threshold=settings.CONFIDENCE_THRESHOLD,
     )
@@ -108,7 +106,7 @@ async def rerun_detection_endpoint(
         raise EntityNotFoundError(f"Image {image_id} not found.")
 
     yolo = get_yolo_service()
-    detection_results = yolo.detect_objects(
+    detection_results = await yolo.detect_objects_async(
         image_source=image.storage_path,
         conf_threshold=confidence_threshold,
     )

@@ -308,6 +308,7 @@ class MultiModalFusionEngine:
         yolo_detections: List[dict],
         dialogue_history: List[DialogueTurn],
         conf_threshold: float = 0.40,
+        vqa_error: Optional[str] = None,
     ) -> dict:
         """
         Fuses multimodal sources into a grammatically structured, context-aware answer.
@@ -491,7 +492,7 @@ class MultiModalFusionEngine:
                     response = f"The detected objects are located across the image: {loc_summary}."
 
         # ========================================================
-        # ROUTE 4: VISUAL ATTRIBUTES & SCENE DESCRIPTIONS (BLIP)
+        # ROUTE 4: VISUAL ATTRIBUTES & SCENE DESCRIPTIONS (VQA)
         # ========================================================
         elif intent == QuestionIntent.VISUAL_ATTRIBUTE:
             clean_vqa = (vqa_answer or "").strip()
@@ -501,8 +502,14 @@ class MultiModalFusionEngine:
                     response = f"Visual analysis indicates that the {target_class} is {clean_vqa}."
                 else:
                     response = f"Visual analysis indicates: {clean_vqa.capitalize()}."
+            elif vqa_error:
+                response = f"Visual question answering is currently unavailable: {vqa_error}"
             else:
-                response = "I have inspected the image, but could not detect a definitive visual feature answering that specific query."
+                response = (
+                    "Visual question answering is currently unavailable because the external inference service "
+                    "(HF_TOKEN) is unconfigured or unreachable. You can continue asking questions about detected "
+                    "objects, categories, counts, and spatial positions."
+                )
 
         # ========================================================
         # ROUTE 5: GENERAL CONVERSATION
@@ -513,8 +520,13 @@ class MultiModalFusionEngine:
                 response = f"Visual analysis indicates: {clean_vqa.capitalize()}."
             elif total_detections > 0:
                 response = f"The image contains {total_visible} visible detected objects at {threshold_pct}% confidence."
+            elif vqa_error:
+                response = f"Visual analysis is currently unavailable: {vqa_error}"
             else:
-                response = "I have inspected the image, but could not detect a definitive visual feature answering that specific query."
+                response = (
+                    "Visual analysis is currently operating in low-memory cloud mode. "
+                    "You can ask questions about detected objects, counts, and spatial positions."
+                )
 
         # Add contextual follow-up continuation if prior dialogue exists and question was a follow-up
         if is_follow_up and not response.startswith("Regarding your follow-up:"):

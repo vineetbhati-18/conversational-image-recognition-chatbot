@@ -42,11 +42,25 @@ async def get_health_status(db: AsyncSession = Depends(get_db)):
     mps_built = torch.backends.mps.is_built()
     active_device = settings.INFERENCE_DEVICE
 
+    # 3. Process Memory Metrics
+    import os
+    import psutil
+    try:
+        proc = psutil.Process(os.getpid())
+        mem_rss_mb = round(proc.memory_info().rss / (1024 * 1024), 2)
+    except Exception:
+        mem_rss_mb = None
+
     return {
         "status": "healthy" if db_status == "connected" else "degraded",
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
+        "memory": {
+            "rss_mb": mem_rss_mb,
+            "container_limit_mb": 512,
+            "is_memory_safe": mem_rss_mb < 450 if mem_rss_mb else True,
+        },
         "database": {
             "status": db_status,
             "version": db_version,

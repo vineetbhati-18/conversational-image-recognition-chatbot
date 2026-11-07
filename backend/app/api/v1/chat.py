@@ -99,13 +99,14 @@ async def send_chat_message(
             )
 
             # Route object identification, counting, and spatial queries directly to structured YOLO data.
-            # Only execute BLIP VQA for visual attributes, color, appearance, and scene descriptions.
+            # Only execute external VQA for visual attributes, color, appearance, and scene descriptions.
             if intent in (QuestionIntent.VISUAL_ATTRIBUTE, QuestionIntent.GENERAL):
                 import asyncio
                 blip = get_blip_service()
                 vqa_res = await asyncio.to_thread(blip.answer_question, image.storage_path, resolved_query)
-                vqa_answer = vqa_res["answer"]
-                vqa_latency = vqa_res["latency_ms"]
+                vqa_answer = vqa_res.get("answer") or ""
+                vqa_error = vqa_res.get("error")
+                vqa_latency = vqa_res.get("latency_ms", 0.0)
 
     # 4. Generate Synthesized Response via Fusion Engine
     fused = fusion_engine.generate_fused_response(
@@ -114,6 +115,7 @@ async def send_chat_message(
         yolo_detections=yolo_detections,
         dialogue_history=history_turns,
         conf_threshold=conf_threshold,
+        vqa_error=vqa_error if "vqa_error" in locals() else None,
     )
 
     total_latency_ms = round((time.perf_counter() - start_time) * 1000, 2)

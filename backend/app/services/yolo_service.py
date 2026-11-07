@@ -1,6 +1,7 @@
 import torch
 from ultralytics import YOLO
 import logging
+import asyncio
 from typing import Optional
 from pathlib import Path
 from app.config import get_settings
@@ -12,7 +13,7 @@ settings = get_settings()
 class YOLOService:
     """
     YOLOv8 Deep-Learning Object Detection Engine.
-    Configured for local Apple Silicon Metal Performance Shaders (MPS) execution.
+    Configured for single-threaded CPU or Apple Silicon MPS execution with strict memory guards.
     """
 
     def __init__(self, model_name: Optional[str] = None):
@@ -20,6 +21,7 @@ class YOLOService:
         self.device = settings.INFERENCE_DEVICE
         self.model: Optional[YOLO] = None
         self._is_loaded = False
+        self._lock = asyncio.Lock()
 
     def load_model(self) -> None:
         """
@@ -143,6 +145,8 @@ class YOLOService:
         logger.info(
             f"YOLO detected {len(detections)} objects on {self.device.upper()} in {latency_ms:.2f}ms"
         )
+        del boxes
+        del result
         del results
         gc.collect()
         try:
@@ -160,6 +164,24 @@ class YOLOService:
             "device": self.device,
             "model": self.model_name,
         }
+
+    async def detect_objects_async(
+        self,
+        image_source,
+        conf_threshold: float = 0.35,
+        classes_filter: Optional[list] = None,
+    ) -> dict:
+        """
+        Concurrency-controlled async wrapper for YOLO detection.
+        Guarantees only ONE inference runs at a time to prevent memory spikes in 512MB RAM environments.
+        """
+        async with self._lock:
+            return await asyncio.to_thread(
+                self.detect_objects,
+                image_source=image_source,
+                conf_threshold=conf_threshold,
+                classes_filter=classes_filter,
+            )
 
 
 _yolo_instance: Optional[YOLOService] = None
