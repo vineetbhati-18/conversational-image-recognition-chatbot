@@ -126,3 +126,40 @@ def test_fusion_multi_turn_follow_up_conversation(ptp_telemetry):
     assert "Regarding your follow-up:" in t4_res["content"]
     assert "silver" in t4_res["content"].lower()
     assert "car" in t4_res["content"].lower()
+
+
+def test_fusion_road_sidewalk_spatial_query():
+    """Verifies queries like 'Is the truck parked on the road or on the sidewalk?' return explicit surface location."""
+    engine = MultiModalFusionEngine()
+    pap_telemetry = [
+        {"class_name": "car", "confidence": 0.67, "spatial_sector": "middle-right"},
+        {"class_name": "car", "confidence": 0.56, "spatial_sector": "top-right"},
+        {"class_name": "truck", "confidence": 0.50, "spatial_sector": "center"},
+    ]
+
+    # Query 1: road vs sidewalk
+    res = engine.generate_fused_response(
+        "Is the truck parked on the road or on the sidewalk?",
+        vqa_answer="",
+        yolo_detections=pap_telemetry,
+        dialogue_history=[],
+        conf_threshold=0.40,
+    )
+    assert res["intent"] == "spatial_location"
+    assert "road (street)" in res["content"]
+    assert "not on the sidewalk" in res["content"]
+    assert "center" in res["content"]
+
+    # Query 2: parked on sidewalk
+    res_sw = engine.generate_fused_response(
+        "Is it parked on the sidewalk?",
+        vqa_answer="",
+        yolo_detections=pap_telemetry,
+        dialogue_history=[
+            DialogueTurn("user", "Where is the truck?"),
+            DialogueTurn("assistant", "The truck is in the center.", {"primary_subject": "truck"}),
+        ],
+        conf_threshold=0.40,
+    )
+    assert "not on the sidewalk" in res_sw["content"]
+

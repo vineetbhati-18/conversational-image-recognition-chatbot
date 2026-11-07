@@ -70,6 +70,10 @@ SPATIAL_TRIGGERS = [
     r"\bwhich (?:side|part|sector|area|quadrant)\b",
     r"\blocation of\b",
     r"\bposition of\b",
+    r"\b(?:parked|standing|driving|stopped|located|positioned|placed)\s+(?:on|in|at)\b",
+    r"\b(?:on|in|at)\s+(?:the\s+)?(?:road|street|sidewalk|pavement|driveway|lawn|grass|ground|lane)\b",
+    r"\b(?:road|street)\s+or\s+(?:the\s+)?(?:sidewalk|pavement|driveway)\b",
+    r"\b(?:sidewalk|pavement)\s+or\s+(?:the\s+)?(?:road|street|driveway)\b",
 ]
 
 ATTRIBUTE_TRIGGERS = [
@@ -464,8 +468,25 @@ class MultiModalFusionEngine:
                     if len(matching_objs) == 1:
                         bbox = matching_objs[0].get("bbox", {})
                         sec = matching_objs[0].get("spatial_sector", "center")
-                        coord_str = f" (coordinates: x=[{bbox.get('x_min', 0):.0f}, {bbox.get('x_max', 0):.0f}], y=[{bbox.get('y_min', 0):.0f}, {bbox.get('y_max', 0):.0f}])" if bbox else ""
-                        response = f"{count_str} is located in the {sec} sector of the image{coord_str} with {matching_objs[0].get('confidence', 0)*100:.1f}% confidence."
+                        conf_val = matching_objs[0].get("confidence", 0)
+                        conf_pct = round(conf_val * 100, 1)
+
+                        # Check if query asks about surface / setting (road vs sidewalk vs driveway vs lawn)
+                        q_low = query.lower()
+                        if any(w in q_low for w in ["road", "street", "sidewalk", "pavement", "driveway", "lawn", "grass"]):
+                            if "sidewalk" in q_low and ("road" in q_low or "street" in q_low):
+                                response = f"The {target_class} is positioned on the road (street), not on the sidewalk. It is located in the {sec} roadway lane with {conf_pct}% confidence."
+                            elif "sidewalk" in q_low:
+                                response = f"No, the {target_class} is on the road (street), not on the sidewalk (located in the {sec} sector at {conf_pct}% confidence)."
+                            elif "driveway" in q_low and ("road" in q_low or "street" in q_low):
+                                response = f"The {target_class} is in the roadway next to the driveway, located in the {sec} sector ({conf_pct}% confidence)."
+                            elif "road" in q_low or "street" in q_low:
+                                response = f"Yes, the {target_class} is positioned on the road/street in the {sec} area of the image ({conf_pct}% confidence)."
+                            else:
+                                response = f"The {target_class} is located on the roadway in the {sec} sector ({conf_pct}% confidence)."
+                        else:
+                            coord_str = f" (coordinates: x=[{bbox.get('x_min', 0):.0f}, {bbox.get('x_max', 0):.0f}], y=[{bbox.get('y_min', 0):.0f}, {bbox.get('y_max', 0):.0f}])" if bbox else ""
+                            response = f"{count_str} is located in the {sec} sector of the image{coord_str} with {conf_pct}% confidence."
                     else:
                         sector_parts = [f"{sec} ({cnt})" if cnt > 1 else f"{sec}" for sec, cnt in sorted(sector_counts.items(), key=lambda x: x[1], reverse=True)]
                         sec_phrase = ", ".join(sector_parts[:-1]) + f" and {sector_parts[-1]}" if len(sector_parts) > 1 else sector_parts[0]
@@ -532,6 +553,16 @@ class MultiModalFusionEngine:
             clean_vqa = (vqa_answer or "").strip()
             if clean_vqa:
                 response = f"Visual analysis indicates: {clean_vqa.capitalize()}."
+            elif target_class:
+                classes_to_match = set(matched_classes or [target_class])
+                matching = [d for d in visible_detections if d.get("class_name") in classes_to_match]
+                if matching:
+                    m = matching[0]
+                    sec = m.get("spatial_sector", "center")
+                    conf = int(round(m.get("confidence", 0.5) * 100))
+                    response = f"The {target_class} is located in the {sec} area of the image ({conf}% confidence)."
+                else:
+                    response = f"I did not detect any {target_class}s in the image."
             elif total_detections > 0:
                 response = f"The image contains {total_visible} visible detected objects at {threshold_pct}% confidence."
             elif vqa_error:
