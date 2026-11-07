@@ -1,6 +1,11 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useChat } from '../../context/ChatContext';
-import { getColorForClass, isPointInBBox } from '../../utils/canvasHelpers';
+import {
+  getColorForClass,
+  getImageRenderedBounds,
+  getNormalizedBBox,
+  isPointInBBox,
+} from '../../utils/canvasHelpers';
 import { Eye, EyeOff, ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2, Percent } from 'lucide-react';
 
 export default function ImageCanvasViewer() {
@@ -34,37 +39,41 @@ export default function ImageCanvasViewer() {
     const img = imageRef.current;
     if (!canvas || !img || !activeImage) return;
 
-    const ctx = canvas.getContext('2d');
-    const renderedWidth = img.clientWidth;
-    const renderedHeight = img.clientHeight;
+    const bounds = getImageRenderedBounds(img);
+    if (!bounds || bounds.renderWidth <= 0 || bounds.renderHeight <= 0) return;
 
-    canvas.width = renderedWidth;
-    canvas.height = renderedHeight;
-    ctx.clearRect(0, 0, renderedWidth, renderedHeight);
+    const clientWidth = bounds.clientWidth;
+    const clientHeight = bounds.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+
+    // Set canvas buffer dimensions scaled by DPR for sharp rendering
+    canvas.width = clientWidth * dpr;
+    canvas.height = clientHeight * dpr;
+    canvas.style.width = `${clientWidth}px`;
+    canvas.style.height = `${clientHeight}px`;
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, clientWidth, clientHeight);
 
     if (!showBoxes || visibleObjects.length === 0) return;
 
-    const naturalWidth = activeImage.width || img.naturalWidth || renderedWidth;
-    const naturalHeight = activeImage.height || img.naturalHeight || renderedHeight;
-    const scaleX = renderedWidth / naturalWidth;
-    const scaleY = renderedHeight / naturalHeight;
+    const naturalWidth = activeImage.width || bounds.naturalWidth;
+    const naturalHeight = activeImage.height || bounds.naturalHeight;
 
     visibleObjects.forEach((obj) => {
+      const norm = getNormalizedBBox(obj, naturalWidth, naturalHeight);
+      if (!norm) return;
+
       const isSelected = selectedObjectId === obj.id;
       const isHovered = hoveredObjectId === obj.id;
       const colors = getColorForClass(obj.class_name);
 
-      const bbox = obj.bbox || {
-        x_min: obj.bbox_x_min,
-        y_min: obj.bbox_y_min,
-        x_max: obj.bbox_x_max,
-        y_max: obj.bbox_y_max,
-      };
-
-      const x = bbox.x_min * scaleX;
-      const y = bbox.y_min * scaleY;
-      const width = (bbox.x_max - bbox.x_min) * scaleX;
-      const height = (bbox.y_max - bbox.y_min) * scaleY;
+      // Map normalized coordinates directly onto rendered image rectangle
+      const x = bounds.offsetX + norm.x_min * bounds.renderWidth;
+      const y = bounds.offsetY + norm.y_min * bounds.renderHeight;
+      const width = (norm.x_max - norm.x_min) * bounds.renderWidth;
+      const height = (norm.y_max - norm.y_min) * bounds.renderHeight;
 
       // Draw bounding box rectangle
       ctx.lineWidth = isSelected ? 2.5 : isHovered ? 2 : 1.5;
@@ -90,7 +99,7 @@ export default function ImageCanvasViewer() {
       const badgeHeight = 16;
       const badgeWidth = textWidth + 8;
 
-      const badgeY = y - badgeHeight >= 0 ? y - badgeHeight : y;
+      const badgeY = y - badgeHeight >= bounds.offsetY ? y - badgeHeight : y;
       ctx.fillStyle = isSelected ? '#0284c7' : colors.stroke;
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath();
@@ -112,11 +121,23 @@ export default function ImageCanvasViewer() {
     hoveredObjectId,
   ]);
 
+  // Keep canvas synced with image layout changes and resize observer
   useEffect(() => {
     renderCanvas();
     const handleResize = () => renderCanvas();
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    const img = imageRef.current;
+    let observer;
+    if (img && typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => renderCanvas());
+      observer.observe(img);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (observer) observer.disconnect();
+    };
   }, [renderCanvas]);
 
   const handleCanvasMouseMove = (e) => {
@@ -124,24 +145,19 @@ export default function ImageCanvasViewer() {
     const img = imageRef.current;
     if (!canvas || !img || !activeImage) return;
 
+    const bounds = getImageRenderedBounds(img);
+    if (!bounds) return;
+
     const rect = canvas.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    const naturalWidth = activeImage.width || img.naturalWidth || canvas.width;
-    const naturalHeight = activeImage.height || img.naturalHeight || canvas.height;
-    const scaleX = canvas.width / naturalWidth;
-    const scaleY = canvas.height / naturalHeight;
+    const naturalWidth = activeImage.width || bounds.naturalWidth;
+    const naturalHeight = activeImage.height || bounds.naturalHeight;
 
-    const hovered = visibleObjects.find((obj) => {
-      const bbox = obj.bbox || {
-        x_min: obj.bbox_x_min,
-        y_min: obj.bbox_y_min,
-        x_max: obj.bbox_x_max,
-        y_max: obj.bbox_y_max,
-      };
-      return isPointInBBox(clientX, clientY, bbox, scaleX, scaleY);
-    });
+    const hovered = visibleObjects.find((obj) =>
+      isPointInBBox(clientX, clientY, obj, bounds, naturalWidth, naturalHeight)
+    );
 
     setHoveredObjectId(hovered ? hovered.id : null);
   };
@@ -151,24 +167,19 @@ export default function ImageCanvasViewer() {
     const img = imageRef.current;
     if (!canvas || !img || !activeImage) return;
 
+    const bounds = getImageRenderedBounds(img);
+    if (!bounds) return;
+
     const rect = canvas.getBoundingClientRect();
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    const naturalWidth = activeImage.width || img.naturalWidth || canvas.width;
-    const naturalHeight = activeImage.height || img.naturalHeight || canvas.height;
-    const scaleX = canvas.width / naturalWidth;
-    const scaleY = canvas.height / naturalHeight;
+    const naturalWidth = activeImage.width || bounds.naturalWidth;
+    const naturalHeight = activeImage.height || bounds.naturalHeight;
 
-    const clicked = visibleObjects.find((obj) => {
-      const bbox = obj.bbox || {
-        x_min: obj.bbox_x_min,
-        y_min: obj.bbox_y_min,
-        x_max: obj.bbox_x_max,
-        y_max: obj.bbox_y_max,
-      };
-      return isPointInBBox(clientX, clientY, bbox, scaleX, scaleY);
-    });
+    const clicked = visibleObjects.find((obj) =>
+      isPointInBBox(clientX, clientY, obj, bounds, naturalWidth, naturalHeight)
+    );
 
     setSelectedObjectId(clicked ? clicked.id : null);
   };
@@ -285,7 +296,7 @@ export default function ImageCanvasViewer() {
             onClick={handleCanvasClick}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={() => setHoveredObjectId(null)}
-            className="absolute inset-0 w-full h-full cursor-crosshair rounded"
+            className="absolute inset-0 w-full h-full cursor-crosshair rounded pointer-events-auto"
           />
         </div>
       </div>

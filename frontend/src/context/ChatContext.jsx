@@ -328,6 +328,8 @@ export function ChatProvider({ children }) {
       const response = await apiUploadImage(uploadFile, targetSessionId);
       if (response) {
         if (response.id) newImagePayload.id = response.id;
+        if (response.width) newImagePayload.width = response.width;
+        if (response.height) newImagePayload.height = response.height;
         if (response.url) {
           const resolvedUploadedUrl = resolveMediaUrl(response.url);
           newImagePayload.url = resolvedUploadedUrl;
@@ -336,6 +338,7 @@ export function ChatProvider({ children }) {
 
         const detectedCount = response.detected_objects ? response.detected_objects.length : 0;
         setDetectedObjects(response.detected_objects || []);
+        setActiveImage({ ...newImagePayload });
 
         const classesSummary = detectedCount > 0
           ? [...new Set(response.detected_objects.map((o) => o.class_name))].join(', ')

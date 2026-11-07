@@ -40,6 +40,10 @@ class YOLOService:
                 pass
 
             self.model = YOLO(self.model_name)
+            try:
+                self.model.fuse()
+            except Exception:
+                pass
             # Verify device compatibility
             if self.device == "mps" and not torch.backends.mps.is_available():
                 logger.warning("MPS requested but not available. Falling back to CPU.")
@@ -74,11 +78,13 @@ class YOLOService:
         image_source,
         conf_threshold: float = 0.35,
         classes_filter: Optional[list] = None,
+        orig_dimensions: Optional[tuple] = None,
     ) -> dict:
         """
         Executes deep-learning object detection on an image.
         Returns detected classes, confidence scores, bounding boxes, normalized coordinates,
         spatial sector tags, and execution metrics.
+        Coordinates are accurately mapped to the target/original image dimensions.
         """
         self.load_model()
         import time
@@ -99,8 +105,11 @@ class YOLOService:
         detections = []
         result = results[0]  # First image in batch
         boxes = result.boxes
-        orig_shape = result.orig_shape  # (height, width)
+        orig_shape = result.orig_shape  # (height, width) of image_source
         img_h, img_w = orig_shape[0], orig_shape[1]
+
+        target_w = int(orig_dimensions[0]) if orig_dimensions and orig_dimensions[0] > 0 else img_w
+        target_h = int(orig_dimensions[1]) if orig_dimensions and orig_dimensions[1] > 0 else img_h
 
         if boxes is not None and len(boxes) > 0:
             for box in boxes:
@@ -111,14 +120,27 @@ class YOLOService:
                     continue
 
                 conf = float(box.conf[0].item())
-                xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max]
+                xyxy = box.xyxy[0].tolist()  # [x_min, y_min, x_max, y_max] in image_source coordinates
 
-                x_min, y_min, x_max, y_max = xyxy[0], xyxy[1], xyxy[2], xyxy[3]
-                bbox_w = x_max - x_min
-                bbox_h = y_max - y_min
-                area_ratio = round((bbox_w * bbox_h) / (img_w * img_h), 4) if (img_w * img_h) > 0 else 0.0
+                src_x_min, src_y_min, src_x_max, src_y_max = xyxy[0], xyxy[1], xyxy[2], xyxy[3]
 
-                spatial_sector = self.calculate_spatial_position(x_min, y_min, x_max, y_max, img_w, img_h)
+                # 1. Compute true normalized coordinates in [0, 1] relative to image dimensions
+                norm_x_min = max(0.0, min(1.0, src_x_min / img_w)) if img_w > 0 else 0.0
+                norm_y_min = max(0.0, min(1.0, src_y_min / img_h)) if img_h > 0 else 0.0
+                norm_x_max = max(0.0, min(1.0, src_x_max / img_w)) if img_w > 0 else 0.0
+                norm_y_max = max(0.0, min(1.0, src_y_max / img_h)) if img_h > 0 else 0.0
+
+                # 2. Scale back to target (original image) pixel coordinates
+                target_x_min = norm_x_min * target_w
+                target_y_min = norm_y_min * target_h
+                target_x_max = norm_x_max * target_w
+                target_y_max = norm_y_max * target_h
+
+                bbox_w = target_x_max - target_x_min
+                bbox_h = target_y_max - target_y_min
+                area_ratio = round((bbox_w * bbox_h) / (target_w * target_h), 4) if (target_w * target_h) > 0 else 0.0
+
+                spatial_sector = self.calculate_spatial_position(target_x_min, target_y_min, target_x_max, target_y_max, target_w, target_h)
 
                 detections.append({
                     "id": str(uuid4()),
@@ -129,16 +151,16 @@ class YOLOService:
                     "spatial_sector": spatial_sector,
                     "area_ratio": area_ratio,
                     "bbox": {
-                        "x_min": round(x_min, 2),
-                        "y_min": round(y_min, 2),
-                        "x_max": round(x_max, 2),
-                        "y_max": round(y_max, 2),
+                        "x_min": round(target_x_min, 2),
+                        "y_min": round(target_y_min, 2),
+                        "x_max": round(target_x_max, 2),
+                        "y_max": round(target_y_max, 2),
                     },
                     "normalized_bbox": {
-                        "x_min": round(x_min / img_w, 4) if img_w else 0.0,
-                        "y_min": round(y_min / img_h, 4) if img_h else 0.0,
-                        "x_max": round(x_max / img_w, 4) if img_w else 0.0,
-                        "y_max": round(y_max / img_h, 4) if img_h else 0.0,
+                        "x_min": round(norm_x_min, 4),
+                        "y_min": round(norm_y_min, 4),
+                        "x_max": round(norm_x_max, 4),
+                        "y_max": round(norm_y_max, 4),
                     },
                 })
 
@@ -154,7 +176,7 @@ class YOLOService:
         return {
             "detections": detections,
             "count": len(detections),
-            "image_dimensions": {"width": img_w, "height": img_h},
+            "image_dimensions": {"width": target_w, "height": target_h},
             "latency_ms": round(latency_ms, 2),
             "device": self.device,
             "model": self.model_name,
@@ -165,6 +187,7 @@ class YOLOService:
         image_source,
         conf_threshold: float = 0.35,
         classes_filter: Optional[list] = None,
+        orig_dimensions: Optional[tuple] = None,
     ) -> dict:
         """
         Concurrency-controlled async wrapper for YOLO detection.
@@ -176,6 +199,7 @@ class YOLOService:
                 image_source=image_source,
                 conf_threshold=conf_threshold,
                 classes_filter=classes_filter,
+                orig_dimensions=orig_dimensions,
             )
 
 

@@ -124,6 +124,8 @@ async def validate_and_save_image(
         "url": f"/uploads/{secure_filename}",
         "width": width,
         "height": height,
+        "orig_width": orig_w,
+        "orig_height": orig_h,
         "file_size_bytes": saved_size,
         "mime_type": detected_mime,
         "format": format_name,

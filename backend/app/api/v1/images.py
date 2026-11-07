@@ -60,6 +60,7 @@ async def upload_image_endpoint(
     detection_results = await yolo.detect_objects_async(
         image_source=image_meta["storage_path"],
         conf_threshold=settings.CONFIDENCE_THRESHOLD,
+        orig_dimensions=(image_meta["width"], image_meta["height"]),
     )
 
     # 5. Persist detected objects to PostgreSQL via Repository
@@ -80,6 +81,12 @@ async def upload_image_endpoint(
                 x_max=d["bbox"]["x_max"],
                 y_max=d["bbox"]["y_max"],
             ),
+            normalized_bbox=BoundingBox(
+                x_min=d["normalized_bbox"]["x_min"],
+                y_min=d["normalized_bbox"]["y_min"],
+                x_max=d["normalized_bbox"]["x_max"],
+                y_max=d["normalized_bbox"]["y_max"],
+            ) if "normalized_bbox" in d else None,
         )
         for d in detection_results["detections"]
     ]
@@ -112,6 +119,7 @@ async def rerun_detection_endpoint(
     detection_results = await yolo.detect_objects_async(
         image_source=image.storage_path,
         conf_threshold=confidence_threshold,
+        orig_dimensions=(image.width, image.height),
     )
 
     detected_schemas = [
@@ -125,6 +133,12 @@ async def rerun_detection_endpoint(
                 x_max=d["bbox"]["x_max"],
                 y_max=d["bbox"]["y_max"],
             ),
+            normalized_bbox=BoundingBox(
+                x_min=d["normalized_bbox"]["x_min"],
+                y_min=d["normalized_bbox"]["y_min"],
+                x_max=d["normalized_bbox"]["x_max"],
+                y_max=d["normalized_bbox"]["y_max"],
+            ) if "normalized_bbox" in d else None,
         )
         for d in detection_results["detections"]
     ]

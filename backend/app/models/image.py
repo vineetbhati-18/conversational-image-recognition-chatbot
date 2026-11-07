@@ -59,3 +59,23 @@ class DetectedObjectModel(Base):
             "y_max": self.bbox_y_max,
         }
 
+    @property
+    def normalized_bbox(self) -> dict:
+        w = float(self.image.width) if self.image and self.image.width else 1.0
+        h = float(self.image.height) if self.image and self.image.height else 1.0
+        return {
+            "x_min": round(self.bbox_x_min / w, 4),
+            "y_min": round(self.bbox_y_min / h, 4),
+            "x_max": round(self.bbox_x_max / w, 4),
+            "y_max": round(self.bbox_y_max / h, 4),
+        }
+
+    @property
+    def bbox(self) -> dict:
+        return {
+            "x_min": self.bbox_x_min,
+            "y_min": self.bbox_y_min,
+            "x_max": self.bbox_x_max,
+            "y_max": self.bbox_y_max,
+        }
+

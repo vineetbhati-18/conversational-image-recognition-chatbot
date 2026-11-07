@@ -16,6 +16,7 @@ class DetectedObjectSchema(BaseModel):
     class_name: str
     confidence: float = Field(..., ge=0.0, le=1.0)
     bbox: BoundingBox
+    normalized_bbox: Optional[BoundingBox] = None
 
     model_config = ConfigDict(from_attributes=True)
 
