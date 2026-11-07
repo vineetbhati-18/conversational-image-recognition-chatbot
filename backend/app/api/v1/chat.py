@@ -12,7 +12,8 @@ from app.repositories.image_repo import ImageRepository
 from app.repositories.message_repo import MessageRepository
 from app.schemas.chat import ChatMessageRequest, MessageResponse
 from app.services.blip_service import get_blip_service
-from app.services.conversational_engine import get_context_manager, get_fusion_engine
+from app.services.yolo_service import YOLOService
+from app.services.conversational_engine import get_context_manager, get_fusion_engine, QuestionIntent
 from app.core.exceptions import EntityNotFoundError
 
 router = APIRouter()
@@ -61,15 +62,20 @@ async def send_chat_message(
     yolo_detections = []
     vqa_answer = ""
     vqa_latency = 0.0
+    conf_threshold = payload.confidence_threshold if payload.confidence_threshold is not None else 0.40
 
     if payload.image_id:
         image = await ImageRepository.get_by_id(db, payload.image_id, load_objects=True)
         if image:
+            img_w = image.width or 640
+            img_h = image.height or 480
             yolo_detections = [
                 {
                     "class_name": o.class_name,
                     "confidence": o.confidence_score,
-                    "spatial_sector": "center",
+                    "spatial_sector": YOLOService.calculate_spatial_position(
+                        o.bbox_x_min, o.bbox_y_min, o.bbox_x_max, o.bbox_y_max, img_w, img_h
+                    ),
                     "bbox": {
                         "x_min": o.bbox_x_min,
                         "y_min": o.bbox_y_min,
@@ -80,14 +86,25 @@ async def send_chat_message(
                 for o in image.detected_objects
             ]
 
-            resolved_query = context_mgr.resolve_pronouns_and_coreference(
+            (
+                intent,
+                resolved_query,
+                target_class,
+                matched_classes,
+                spatial_direction,
+                explicit_threshold,
+                is_follow_up,
+            ) = context_mgr.classify_and_resolve(
                 payload.content, history_turns, yolo_detections
             )
 
-            blip = get_blip_service()
-            vqa_res = blip.answer_question(image.storage_path, resolved_query)
-            vqa_answer = vqa_res["answer"]
-            vqa_latency = vqa_res["latency_ms"]
+            # Route object identification, counting, and spatial queries directly to structured YOLO data.
+            # Only execute BLIP VQA for visual attributes, color, appearance, and scene descriptions.
+            if intent in (QuestionIntent.VISUAL_ATTRIBUTE, QuestionIntent.GENERAL):
+                blip = get_blip_service()
+                vqa_res = blip.answer_question(image.storage_path, resolved_query)
+                vqa_answer = vqa_res["answer"]
+                vqa_latency = vqa_res["latency_ms"]
 
     # 4. Generate Synthesized Response via Fusion Engine
     fused = fusion_engine.generate_fused_response(
@@ -95,14 +112,17 @@ async def send_chat_message(
         vqa_answer=vqa_answer,
         yolo_detections=yolo_detections,
         dialogue_history=history_turns,
+        conf_threshold=conf_threshold,
     )
 
     total_latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     meta_payload = {
-        "vqa_mode": bool(payload.image_id),
+        "vqa_mode": bool(vqa_answer),
         "vqa_answer": vqa_answer,
         "detected_classes": fused["detected_classes"],
+        "primary_subject": fused.get("primary_subject"),
+        "intent": fused.get("intent"),
         "latency_ms": total_latency_ms,
         "vqa_latency_ms": vqa_latency,
     }

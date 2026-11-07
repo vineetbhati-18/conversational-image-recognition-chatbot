@@ -64,15 +64,20 @@ export async function detectObjects(imageId, confidenceThreshold = 0.35) {
   return response.json();
 }
 
-export async function sendChatMessage(sessionId, content, imageId = null) {
+export async function sendChatMessage(sessionId, content, imageId = null, confidenceThreshold = null) {
+  const payload = {
+    session_id: sessionId,
+    content,
+    image_id: imageId,
+  };
+  if (confidenceThreshold !== null && confidenceThreshold !== undefined) {
+    payload.confidence_threshold = confidenceThreshold;
+  }
+
   const response = await fetch(`${API_BASE_URL}/chat/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      session_id: sessionId,
-      content,
-      image_id: imageId,
-    }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

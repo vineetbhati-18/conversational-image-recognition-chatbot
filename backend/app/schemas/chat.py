@@ -8,6 +8,8 @@ class ChatMessageRequest(BaseModel):
     session_id: UUID = Field(..., description="Target conversation session UUID")
     content: str = Field(..., min_length=1, max_length=4000, description="User question or prompt")
     image_id: Optional[UUID] = Field(default=None, description="Active image context UUID if available")
+    confidence_threshold: Optional[float] = Field(default=0.40, ge=0.01, le=1.0, description="Confidence filter threshold")
+
 
 
 class MessageResponse(BaseModel):

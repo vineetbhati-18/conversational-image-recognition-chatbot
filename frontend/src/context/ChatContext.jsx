@@ -232,11 +232,12 @@ export function ChatProvider({ children }) {
     setErrorMessage(null);
 
     try {
-      // Call backend chat API with active image ID
+      // Call backend chat API with active image ID and user confidence threshold
       const res = await apiSendChatMessage(
         activeSessionId,
         trimmed,
-        activeImage?.id || null
+        activeImage?.id || null,
+        confidenceThreshold
       );
 
       if (res && res.content) {
@@ -263,7 +264,7 @@ export function ChatProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  }, [activeSessionId, activeImage]);
+  }, [activeSessionId, activeImage, confidenceThreshold]);
 
   return (
     <ChatContext.Provider
