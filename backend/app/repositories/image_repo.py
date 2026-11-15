@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
-from uuid import UUID
+from uuid import UUID, uuid4
 from typing import List, Optional
 from app.models.image import ImageModel, DetectedObjectModel
 
@@ -54,6 +54,7 @@ class ImageRepository:
         for d in detections:
             bbox = d.get("bbox", {})
             obj = DetectedObjectModel(
+                id=UUID(d["id"]) if d.get("id") else uuid4(),
                 image_id=image_id,
                 class_name=d.get("class_name", "object"),
                 confidence_score=d.get("confidence", 1.0),
@@ -66,3 +67,39 @@ class ImageRepository:
             db_objs.append(obj)
         await db.commit()
         return db_objs
+
+    @staticmethod
+    async def replace_detected_objects(
+        db: AsyncSession,
+        image_id: UUID,
+        detections: List[dict],
+    ) -> List[DetectedObjectModel]:
+        try:
+            await db.execute(
+                delete(DetectedObjectModel).where(
+                    DetectedObjectModel.image_id == image_id
+                )
+            )
+
+            db_objs = []
+            for d in detections:
+                bbox = d.get("bbox", {})
+                obj = DetectedObjectModel(
+                    id=UUID(d["id"]) if d.get("id") else uuid4(),
+                    image_id=image_id,
+                    class_name=d.get("class_name", "object"),
+                    confidence_score=d.get("confidence", 1.0),
+                    bbox_x_min=bbox.get("x_min", 0.0),
+                    bbox_y_min=bbox.get("y_min", 0.0),
+                    bbox_x_max=bbox.get("x_max", 0.0),
+                    bbox_y_max=bbox.get("y_max", 0.0),
+                )
+                db.add(obj)
+                db_objs.append(obj)
+
+            await db.commit()
+            return db_objs
+
+        except Exception:
+            await db.rollback()
+            raise

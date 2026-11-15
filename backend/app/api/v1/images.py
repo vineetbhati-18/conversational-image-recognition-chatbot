@@ -122,6 +122,12 @@ async def rerun_detection_endpoint(
         orig_dimensions=(image.width, image.height),
     )
 
+    await ImageRepository.replace_detected_objects(
+        db,
+        image_id=image.id,
+        detections=detection_results["detections"],
+    )
+
     detected_schemas = [
         DetectedObjectSchema(
             id=UUID(d["id"]),
